@@ -97,7 +97,7 @@ while (attempt < 10) {
     
     }  else if(length(different_permalinks) == 0) {
       
-        if(test || attempts > 3) {
+        if(test || attempt > 3) {
           
         if(test) message("\nFailures not re-attempted in test mode.")
         
