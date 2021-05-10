@@ -10,7 +10,7 @@ library(lubridate)
 library(rvest)
 library(tidyverse)
 library(tictoc)
-source('R/extract_text.R')
+source('download_scripts/02b_extract_text.R')
 })
 
 # Download one CSV file per search topic from the Hansard search website 
@@ -30,7 +30,7 @@ message(dirpath, " created")
 
 }
 
-main_folder <- 'coal_data'
+main_folder <- 'civility_data'
 
 source_path <- paste0(main_folder, '/records/')
 
@@ -39,9 +39,9 @@ problem_counter <- 0 # For use inside query_in_batches.R
 
 cargs <- commandArgs(trailingOnly = T)
 
-test <- cargs[1]
+test <- as.logical(cargs[1])
 
-if(is.na(test)) test <- FALSE else test <- TRUE
+if(is.na(test)) test <- TRUE else test <- FALSE
 
 if(test) {  
   
@@ -129,7 +129,7 @@ for (yr in rev_sorted_years) {
 message("\n*** Processing records from ", yr, " ***")
 message("AEST ", now(tzone = "Australia/Melbourne"), "\n")
 
-source('R/dl_hansard2.R', local = TRUE)
+source('download_scripts/02_batch_download.R', local = TRUE)
 
 }
 

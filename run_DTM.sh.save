@@ -1,0 +1,1 @@
+ ./main   --ntopics=10   --mode=fit   --rng_seed=0   --initialize_lda=true   --corpus_prefix=/data/hansard/civility_output   --outname=/data/greyroads/energy-roadmap/DTM/journal_energy_policy_applied_energy__solar_seeded/model_run   --top_chain_var=0.005   --alpha=0.01   --lda_sequence_min_iter=6   --lda_sequence_max_iter=20   --lda_max_em_iter=10

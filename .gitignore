@@ -1,6 +1,11 @@
+.*
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
-coal_data/
+*_data/
 *.log
+*_output/
+dtm/
+*.go
+dynamic-senses

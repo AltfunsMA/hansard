@@ -58,7 +58,7 @@ while (attempt < 10) {
     # MAIN DOWNLOAD CALL ##########
     #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
     
-    source("R/query_in_batches.R")
+    source("download_scripts/02a_main_query.R")
     
     
   } 
