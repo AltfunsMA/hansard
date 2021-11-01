@@ -1,0 +1,528 @@
+---
+title: "Australian Hansard topic modelling analysis"
+author: "Alfonso M Arranz"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+    df_print: paged
+---
+
+```{r, echo = TRUE}
+pacman::p_load(stringr, tidyverse, tidytable, purrr, ggplot2)
+
+all <- TRUE
+
+if(all) {
+  
+  params <- "k40_var0.05"
+  
+  dtm_run_path <-
+    "coal_output/dtm/run_21Sep//all_2a_min_freq_150_21_09_21/"
+  
+  
+  docs_file <- "id_alliance_all_2a.csv"
+  
+  elec_period <- 1901:2020
+  
+  minimum_display_year <- 1900
+  
+} else {
+  
+  params <- "k25_var0.05"
+  
+  dtm_run_path <-
+    "coal_output/dtm/run_21Sep//all_2a_last_20_years_min_freq_80_21_09_21/"
+  
+  docs_file <- "id_alliance_last20_2a.csv"
+  
+  elec_period <- 2000:2020
+  
+  minimum_display_year <- 2000
+  
+  
+}
+
+
+main_eras <- c(1935, 1963, 2005)
+
+
+
+input_df <- fread.(paste0("coal_data/04_model_inputs/preprocessed_datasets/", docs_file)) %>% 
+  select.(-contains("lucy"))
+```
+
+
+```{r}
+input_df %>% 
+  count.(final_alliance)
+
+
+```
+
+
+
+```{r}
+
+input_df %>% 
+  count.(final_alliance)
+
+```
+
+
+
+```{r, echo=FALSE}
+aus_pms <- fread.("/data/hansard/terms/aus_pm_parties_clean.csv") %>% 
+  arrange.(start_year) %>% 
+  mutate.(end_year = lead(start_year, default = 2022),
+          simple_party = fct_relevel(ifelse.(party == "Australian Labor Party", "Labor", "Liberal"), "Labor"))
+
+
+
+party_names <- c("Liberal", "Labor", "Greens", "Country", "Other")
+
+party_colours <- c("blue", "darkred", "darkgreen", "goldenrod3", "black")
+
+names(party_colours) <- party_names
+
+basic_add_ons <- list(scale_fill_manual(values = party_colours),
+                    labs(x = ""),
+                    geom_vline(xintercept = main_eras, linetype = "dashed"))
+
+
+
+elections <- tibble(year = elec_period) %>% 
+  left_join.(select(aus_pms, start_year, pm), by = c("year" = "start_year")) %>% 
+  fill(pm) %>% 
+  mutate.(legislature = cumsum(replace_na(pm != lag(pm), TRUE)),
+          era = cut(year, c(1900, main_eras, 2021)))
+
+
+
+
+
+topic_nums <- as.character(as.numeric(str_extract(params, "\\d{2}")) - 1)
+
+topic_distributions <- fread.(paste0(dtm_run_path, "/analysis/", params, "_doc_topic_distribution.csv")) %>% 
+  mutate.(row_score = rowSums(select.(., `0`:sym(topic_nums))),
+          across.(c(`0`:sym(topic_nums)), ~.x/row_score))
+
+
+
+topic_labels <- fread.(paste0(dtm_run_path, "analysis/", params, "_manual.csv"))
+
+
+
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, results = 'asis', cache.lazy = FALSE)
+```
+
+
+## Raw number of docs by party
+```{r}
+
+ggplot(input_df) +
+  geom_bar(aes(year, fill = final_alliance)) +
+  basic_add_ons +
+  labs(y = "Standardised (~300 token) paragraphs per year")
+
+```
+
+
+
+### relative to parliamentary activity
+
+https://www.aph.gov.au/-/media/02_Parliamentary_Business/22_Chamber_Documents/224_Statistics/House_of_Representatives/Statistics_Historical/legislation_statistics.pdf?la=en&hash=6ADCACEE5832882C1E8660A06563DC9200F6EC54
+
+https://www.aph.gov.au/Parliamentary_Business/Bills_Legislation/Bills_Lists/Details_page?blsId=legislation%2Fbillslst%2Fbillslst_c203aa1c-1876-41a8-bc76-1de328bdb726
+
+
+dividing the counts of paragraphs discussing coal by the number of bills passed in parliament that year as a proxy for parliamentary activity. The results are then normalised so that 1 corresponds to the largest amount of discussion by any party, which corresponds to the Greens in 2019. Parliament has arguably become more active over time in part due to an increase in the number of MPs and Senators and in part due to the increased requirements of a larger population and a more complex economy.
+
+With those differences taken into account, the periods between 1940 and 1960 and post-2005 stand out, corresponding respectively to 
+
+```{r}
+# NB: import of rightmost 4 columns is not accurate bc of odd formatting of original PDF table
+
+parl_activity <- fread.("terms/parl_stats.csv", fill = TRUE, col.names = c("year", "total_bills", "private_bills", "senate_bills", "chamber_bills", "house_bills", "acts")) %>% 
+  mutate(year = as.numeric(str_remove(year, "\\*"))) %>% 
+  select(year, total_bills)
+  
+
+relative_discussion <- input_df %>% 
+  filter.(year < 2020) %>% 
+  left_join.(parl_activity) %>% 
+  summarize.(.by = c(year, final_alliance),
+             weighted_paras = n()/total_bills) %>% 
+  distinct.() %>% 
+  mutate.(weighted_paras_yr = cptools::normalise(weighted_paras))
+
+```
+
+largest amount of discussion
+```{r}
+relative_discussion %>% 
+  filter(weighted_paras == max(weighted_paras))
+
+```
+
+
+years above the 80% value: 
+```{r}
+
+relative_discussion %>% 
+  filter(weighted_paras > quantile(weighted_paras, 0.8)) %>% 
+  distinct(year) %>% 
+  pull() %>% 
+  sort() %>% 
+  cat(sep = ", ")
+
+```
+
+
+
+```{r}
+
+ggplot(relative_discussion) +
+  geom_col(aes(year, weighted_paras, fill = final_alliance)) +
+  basic_add_ons +
+  labs(y = "Coal discussion level") +
+  xlim(1901, 2020)
+  
+
+```
+
+
+
+### Bringing various elements together
+
+filtering the minimal part of "other" in the period prior to 1975 and in general any topic before 1910 because the amounts of information are tiny and lead to wild fluctuations in proportion.
+
+```{r, echo = TRUE}
+
+# From this article https://www.blueprintinstitute.org.au/polling_data
+coal_mining_regions <- "Kalgoorlie|Parkes|Lyne|Hunter|calare|shortland|Flynn|Maranoa|gippsland|connor|capricornia"
+
+combined_df <- input_df %>% 
+  select.(doc_id, electorate, final_alliance, year) %>% 
+  left_join.(select.(topic_distributions, -c(V1, year))) %>% 
+  pivot_longer.(c(`0`:sym(topic_nums)), names_to = "topic_no", values_to = "score") %>% 
+  mutate.(topic_no = as.integer(topic_no)) %>% 
+  left_join.(topic_labels) %>% 
+  left_join.(select(elections, year, era, legislature)) %>% 
+  filter.(year > minimum_display_year, 
+          !(final_alliance == "Other" & year < 1975)) %>% 
+  mutate.(label = paste0(str_pad(topic_no, 2, "left", "0"), "_", label),
+          mining_region = str_detect(electorate, regex(coal_mining_regions, ignore_case = T)))
+  
+  
+```
+
+
+
+```{r}
+
+combined_df %>% 
+  count.(mining_region, final_alliance) %>% 
+  mutate.(.by = mining_region, prop = scales::percent(N/sum(N))) %>% 
+  filter.(mining_region == TRUE)
+
+
+```
+
+
+
+### Foci of each party relative to average
+
+(Replicating MH's Fig. 10)
+
+
+```{r}
+
+plot_differences <- function(main_var) {
+  
+  
+  main_score_df <- combined_df %>% 
+    summarize.(.by = {{ main_var }},
+               main_score = sum(score))
+  
+  
+  get_diffs_by <- function(group_var) {
+  
+  group_scores <- combined_df %>% 
+    summarize.(.by = {{group_var}}, party_total_score = sum(score))
+  
+  combined_df %>% 
+    summarize.(.by = c({{group_var}}, {{ main_var }}, superlabel),
+               party_lab_score = sum(score)) %>% 
+    left_join.(group_scores) %>% 
+    mutate.(lab_prop_party = party_lab_score/party_total_score) %>% 
+    mutate.(.by = {{ main_var }}, lab_av_prop = mean(lab_prop_party)) %>% 
+    mutate.(diff = (lab_prop_party - lab_av_prop) * 100,
+            diff_abs = abs(diff)) %>% 
+    filter(!is.na(superlabel)) %>% 
+    rename(common_group = {{ group_var }})
+  
+  }
+  
+  
+  lab_props_party <- get_diffs_by(final_alliance)
+  
+  lab_props_region <- get_diffs_by(mining_region) %>% 
+    mutate.(common_group = ifelse.(common_group == TRUE, 
+                                   "Coal region", 
+                                   NA_character_)) %>% 
+    filter.(!is.na(common_group))
+  
+  # browser()
+    
+  cat("Differences range:", range(lab_props_party$diff), "\n")
+  
+  plot_df <- lab_props_party %>%
+    bind_rows.(lab_props_region) %>% 
+    mutate.(
+      # {{ main_var }} := str_trunc({{ main_var }}, 20, ellipsis = "."),
+      {{ main_var }} := fct_rev(factor({{ main_var }}, 
+                                       sort(unique({{ main_var }})))),
+      common_group := fct_relevel(common_group, c(party_names, "Coal region"))
+    ) %>% 
+    slice_max.(diff_abs, 20) %>% 
+    droplevels()
+  
+  
+  max_diff <- max(plot_df$diff_abs)
+  
+  ggplot(plot_df) +
+    geom_col(
+      aes({{ main_var }}, diff, fill = common_group),
+      position = "dodge",
+      show.legend = F
+    ) +
+    coord_flip() +
+    facet_wrap(~common_group, nrow = 1) +
+    labs(x = "", y = "Difference from average") +
+    geom_abline(slope = 0, intercept = 0) +
+    scale_y_continuous(limits = c(-max_diff, max_diff),
+                       # labels = c(-5, -2.5, 0, 2.5, 5),
+                       # breaks = c(-5, -2.5, 0, 2.5, 5)
+    ) +
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_blank(),
+      axis.line = element_line(colour = "black")
+    ) +
+    basic_add_ons
+  
+}
+
+
+```
+
+
+```{r}
+
+plot_differences(label)
+
+
+```
+
+
+  
+```{r}
+
+plot_differences(superlabel)
+
+```
+
+  
+  
+  
+  
+```{r}
+
+
+process_labs <- function(df, 
+                         main_var,
+                         selection, 
+                         party_var = final_alliance,
+                         time_var = legislature) {
+  
+  
+  
+  if(selection == "all") {
+    
+    selection <- unique(pull(df, {{ main_var }}))
+    
+  }
+  
+  lab_df <- df %>%
+    filter.(year > minimum_display_year) %>% 
+    summarize.(.by = c(year, {{ time_var }}, {{ party_var }}, {{ main_var }}),
+               label_score = sum(score)) %>%
+    mutate.(.by = c(year, {{ party_var }}), 
+            yr_prop = label_score / sum(label_score)) %>% 
+    mutate.(.by = c({{ time_var }}, {{ party_var }}, {{ main_var }}),
+            prop = mean(yr_prop)) %>% 
+    filter.({{ main_var }} %in% selection) 
+  
+  
+}
+
+
+plot_w_legislature <- function(df, 
+                               main_var,
+                               party_var = "final_alliance") {
+  
+
+  df %>% 
+    ggplot() +
+    geom_rect(data = filter(aus_pms, start_year > minimum_display_year), colour=NA, show.legend=FALSE,
+              aes(xmin=start_year, xmax= end_year, ymin = -Inf, ymax = Inf,
+                  fill=simple_party), alpha=0.15) +
+    geom_line(aes_string("year", "prop", colour = party_var)) +
+    facet_wrap(deparse(substitute(main_var))) +
+    basic_add_ons +
+    scale_x_continuous(expand = c(0, 0)) +
+    labs(x = "", y = "Proportion of topic discussion per year") +
+    {if(!is.null(party_var)) scale_colour_manual(values = party_colours[names(party_colours) %in% unique(df$final_alliance)]) } +
+    guides(colour = "none")
+  
+  
+}
+
+```
+
+
+### Manually aggregated superlabels
+
+```{r}
+
+interesting_labels <- c("environment", "trade", "regulation", "workers", "industry", "infrastructure")
+
+combined_df %>% 
+  process_labs(superlabel, interesting_labels) %>% 
+  plot_w_legislature(superlabel)
+
+
+```
+
+
+
+
+```{r}
+
+combined_df %>% 
+  process_labs(superlabel, 
+               interesting_labels, 
+               party_var = NULL, 
+               time_var = era) %>% 
+  plot_w_legislature(superlabel, NULL)
+
+```
+
+
+
+### TF-IDF 'best superlabels'
+
+best used to "confirm" that we're not selecting the wrong thing.
+
+```{r}
+
+combined_df %>%
+  process_labs(most_relevant_tfidf, "all", NULL) %>%
+  plot_w_legislature(most_relevant_tfidf, NULL)
+
+
+```
+
+### MH-style supercategory
+
+```{r}
+
+combined_df %>% 
+  filter.(!is.na(category)) %>% 
+  process_labs(category, "all") %>% 
+  plot_w_legislature(category)
+
+
+```
+
+
+```{r}
+
+combined_df %>% 
+  filter.(!is.na(category)) %>% 
+  process_labs(category, "all") %>% 
+  plot_w_legislature(category)
+
+
+```
+
+
+### By individual topic and era
+
+
+```{r}
+
+
+plot_df <- combined_df %>% 
+  filter.(!is.na(superlabel)) %>% 
+  process_labs(label, 
+               "all", 
+               party_var = NULL, 
+               time_var = era)
+
+for(subl in unique(plot_df$label)) {
+  
+  cat(subl)
+
+  print(plot_df %>% 
+    filter.(label == subl) %>% 
+    plot_w_legislature(label, NULL) +
+    guides(colour = "none"))
+  
+
+}
+
+
+
+
+
+```
+
+
+
+
+
+### By individual topic and party
+
+```{r}
+
+
+label_plot <- combined_df %>% 
+  filter.(!is.na(superlabel)) %>% 
+  # filter.(final_alliance %in% c("Liberal", "Labor")) %>% 
+  process_labs(label, "all")
+
+
+
+for(subl in unique(label_plot$label)) {
+
+    cat(subl)
+  
+  print(label_plot %>% 
+    filter.(label == subl) %>% 
+    plot_w_legislature(label) +
+    guides(colour = "none"))
+  
+
+  
+}
+
+
+```
+
+  
+
+

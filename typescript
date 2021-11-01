@@ -1,0 +1,5 @@
+Script started on 2021-06-29 04:58:25+00:00 [TERM="xterm-256color" TTY="/dev/pts/2" COLUMNS="102" LINES="32"]
+(nlp) \[\e]0;\u@\h: \w\a\]\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]$ ^C
+(nlp) \[\e]0;\u@\h: \w\a\]\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]$ exit
+
+Script done on 2021-06-29 04:58:33+00:00 [COMMAND_EXIT_CODE="130"]

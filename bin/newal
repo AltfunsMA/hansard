@@ -1,0 +1,50 @@
+#! /bin/bash
+
+current_directory=$PWD
+
+new_alias=$1
+new_command=$2
+
+if [[ -z $1 || -z $2 ]]; then
+
+	echo "Provide a new alias as first argument and a quoted command as the second argument."
+	echo "Alternatively provide a '.' as the second argument and the current directory will be added as a cd command"
+
+	exit 1
+
+fi
+
+if [[ $new_command == "." ]]; then
+
+	full="alias ${new_alias}='cd ${current_directory}'"
+
+else
+
+	full='alias ${new_alias}="${new_command}"'
+
+fi
+
+cd $HOME
+
+
+echo $full >> .bash_aliases
+
+dupes=$(cat .bash_aliases | sort | uniq -cd)
+
+if [[ -n $dupes ]]; then
+
+	cat .bash_aliases | sort | uniq > .temp
+	cat .temp > .bash_aliases
+	rm .temp
+
+	echo "Exact duplicate. Line not added."
+
+else
+
+	echo "$full added to .bash_aliases"
+
+fi
+
+
+
+cd $current_directory
