@@ -10,6 +10,8 @@ cargs <- commandArgs(trailingOnly = T)
 
 main_topic <- cargs[1]
 
+timestamp <- cptools::date_str()
+
 if(is.na(main_topic)) {
   
   main_topic <- Sys.getenv("HANSARD_MAIN")
@@ -24,7 +26,8 @@ if(is.na(main_topic)) {
 
 message("Processing: ", main_topic)
 
-input_folder <- paste0(main_topic, "_output/scan_", timestamp, "/")
+# input_folder <- paste0(main_topic, "_output/scan_", timestamp, "/")
+input_folder <- paste0(main_topic, "_output/scan/")
 
 output_folder <- paste0(main_topic, "_output/cleaned/scan_", timestamp, "/")
 
@@ -32,7 +35,7 @@ unlink(output_folder, recursive = T)
 
 dir.create(output_folder)
 
-message("Cleaned output folder: ", output_folder)
+message("Cleaned output folder will be: ", output_folder)
 
 
 fp <- list.files(input_folder, 

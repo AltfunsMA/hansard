@@ -5,11 +5,8 @@
 
 # Get a single orator
 
-suppressPackageStartupMessages({ 
-  library(tidyverse)
-  library(tidytable)
-  library(tidytext)
-})
+pacman::p_load(tidyverse, tidytable, tidytext, lubridate)
+
 
 # Load files (see also 04_categorisation.R) -------------
 
@@ -20,6 +17,7 @@ cargs <- commandArgs(trailingOnly = T)
 
 main_folder <- cargs[1]
 
+mentions_str <- cargs[2]
 
 if (length(cargs) == 0) {
   

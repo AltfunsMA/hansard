@@ -19,7 +19,6 @@ if (length(cargs) == 0) {
   
   main_folder <- 'repr_rights'
   
-    
 }
 
 

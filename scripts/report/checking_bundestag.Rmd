@@ -1,0 +1,101 @@
+
+```{r}
+
+x <- fread.("bundestag/final_300_6000.tsv")
+
+all_compounds <- x %>% 
+  mutate.(kohlen_compounds = str_extract(Speech_text, "\\bKohlen[a-zäöüß]+")) %>% 
+  pull(kohlen_compounds) %>% 
+  unique()
+
+
+
+
+coal_counts <- x %>% 
+  mutate.(prob_composites = str_count(Speech_text, cptools::bound_rx(problem_composita)),
+          egks = str_detect(Speech_text, "Kohle und Stahl"),
+          coal = str_count(Speech_text, "\\bKohle\\b(?!und Stahl)"),
+          other_coal = str_count(Speech_text, "\\bKohlen[a-zäöüß]+"),
+          not_problematic_coal = other_coal - prob_composites + coal)
+
+```
+
+
+
+```{r}
+problem_composita <- read_lines("bundestag/kohle_problemkomposita.txt")
+
+problem_composita
+```
+
+
+```{r}
+
+unrelated_to_coal <- coal_counts %>% 
+  filter.((prob_composites > 0 | egks == TRUE) & not_problematic_coal == 0)
+
+sum(unrelated_to_coal$Paragraph_count)/sum(coal_counts$Paragraph_count)
+
+```
+
+
+```{r}
+
+mentions <- function(ment) {
+  
+  
+  coal_mentions <- coal_counts %>%
+  filter.(coal + other_coal == ment)
+
+cat("paragraph prop:", 
+    sum(coal_mentions$Paragraph_count)/sum(coal_counts$Paragraph_count), "\n")
+
+cat("Speech prop:", nrow(coal_mentions)/nrow(coal_counts), "\n")
+
+
+
+tkns <- coal_mentions %>% 
+  tidytext::unnest_tokens("words", Speech_text)
+
+tkns_counted <- count.(tkns, idx)
+
+
+
+cat("Number of tokens with", ment, "mentions \n")
+print(summary(tkns_counted$N))
+
+  
+  
+}
+
+
+
+```
+
+
+
+```{r}
+
+mentions(1)
+
+```
+
+
+
+```{r}
+
+mentions(2)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+

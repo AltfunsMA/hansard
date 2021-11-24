@@ -9,6 +9,7 @@ dtm/
 dynamic-senses
 *_data/
 *.log
+logs/*
 *_output/
 bundestag/
 wikidata/

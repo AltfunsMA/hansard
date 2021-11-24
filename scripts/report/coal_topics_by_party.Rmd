@@ -10,7 +10,8 @@ output:
 ---
 
 ```{r, echo = TRUE}
-pacman::p_load(stringr, tidyverse, tidytable, purrr, ggplot2)
+pacman::p_load(stringr, tidyverse, scales, tidytable, deeptime, purrr, ggplot2, ggtext, glue)
+
 
 all <- TRUE
 
@@ -44,63 +45,18 @@ if(all) {
   
 }
 
+source('scripts/report/coal_topics_FUNS.R')
 
-main_eras <- c(1935, 1963, 2005)
-
-
-
-input_df <- fread.(paste0("coal_data/04_model_inputs/preprocessed_datasets/", docs_file)) %>% 
+paragraphs_df <- fread.(paste0("coal_data/04_model_inputs/preprocessed_datasets/", docs_file)) %>% 
   select.(-contains("lucy"))
-```
-
-
-```{r}
-input_df %>% 
-  count.(final_alliance)
 
 
 ```
-
-
-
-```{r}
-
-input_df %>% 
-  count.(final_alliance)
-
-```
-
 
 
 ```{r, echo=FALSE}
-aus_pms <- fread.("/data/hansard/terms/aus_pm_parties_clean.csv") %>% 
-  arrange.(start_year) %>% 
-  mutate.(end_year = lead(start_year, default = 2022),
-          simple_party = fct_relevel(ifelse.(party == "Australian Labor Party", "Labor", "Liberal"), "Labor"))
 
-
-
-party_names <- c("Liberal", "Labor", "Greens", "Country", "Other")
-
-party_colours <- c("blue", "darkred", "darkgreen", "goldenrod3", "black")
-
-names(party_colours) <- party_names
-
-basic_add_ons <- list(scale_fill_manual(values = party_colours),
-                    labs(x = ""),
-                    geom_vline(xintercept = main_eras, linetype = "dashed"))
-
-
-
-elections <- tibble(year = elec_period) %>% 
-  left_join.(select(aus_pms, start_year, pm), by = c("year" = "start_year")) %>% 
-  fill(pm) %>% 
-  mutate.(legislature = cumsum(replace_na(pm != lag(pm), TRUE)),
-          era = cut(year, c(1900, main_eras, 2021)))
-
-
-
-
+# Data input
 
 topic_nums <- as.character(as.numeric(str_extract(params, "\\d{2}")) - 1)
 
@@ -121,10 +77,10 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, results = 
 ## Raw number of docs by party
 ```{r}
 
-ggplot(input_df) +
-  geom_bar(aes(year, fill = final_alliance)) +
-  basic_add_ons +
-  labs(y = "Standardised (~300 token) paragraphs per year")
+# ggplot(paragraphs_df) +
+#   geom_bar(aes(year, fill = final_alliance)) +
+#   basic_add_ons +
+#   labs(y = "Standardised (~300 token) paragraphs per year")
 
 ```
 
@@ -145,11 +101,11 @@ With those differences taken into account, the periods between 1940 and 1960 and
 # NB: import of rightmost 4 columns is not accurate bc of odd formatting of original PDF table
 
 parl_activity <- fread.("terms/parl_stats.csv", fill = TRUE, col.names = c("year", "total_bills", "private_bills", "senate_bills", "chamber_bills", "house_bills", "acts")) %>% 
-  mutate(year = as.numeric(str_remove(year, "\\*"))) %>% 
-  select(year, total_bills)
+  mutate.(year = as.numeric(str_remove(year, "\\*"))) %>% 
+  select.(year, total_bills)
   
 
-relative_discussion <- input_df %>% 
+relative_discussion <- paragraphs_df %>% 
   filter.(year < 2020) %>% 
   left_join.(parl_activity) %>% 
   summarize.(.by = c(year, final_alliance),
@@ -159,19 +115,21 @@ relative_discussion <- input_df %>%
 
 ```
 
-largest amount of discussion
+#### largest amount of discussion
 ```{r}
+
 relative_discussion %>% 
   filter(weighted_paras == max(weighted_paras))
 
 ```
 
 
-years above the 80% value: 
+#### years above the 90% value
+
 ```{r}
 
 relative_discussion %>% 
-  filter(weighted_paras > quantile(weighted_paras, 0.8)) %>% 
+  filter(weighted_paras > quantile(weighted_paras, 0.9)) %>% 
   distinct(year) %>% 
   pull() %>% 
   sort() %>% 
@@ -182,17 +140,21 @@ relative_discussion %>%
 
 
 ```{r}
-
-ggplot(relative_discussion) +
-  geom_col(aes(year, weighted_paras, fill = final_alliance)) +
+discussion_parties_gg <- relative_discussion %>% 
+  rename.(Party = final_alliance) %>% 
+  ggplot() +
+  geom_col(aes(year, weighted_paras, fill = Party)) +
   basic_add_ons +
-  labs(y = "Coal discussion level") +
-  xlim(1901, 2020)
+  labs(y = "Discussion level") + 
+  eras_add_on
   
 
+ggsave("coal_output/images4paper/discussion_level_parties.png", discussion_parties_gg)
+
+
+discussion_parties_gg
+
 ```
-
-
 
 ### Bringing various elements together
 
@@ -203,7 +165,7 @@ filtering the minimal part of "other" in the period prior to 1975 and in general
 # From this article https://www.blueprintinstitute.org.au/polling_data
 coal_mining_regions <- "Kalgoorlie|Parkes|Lyne|Hunter|calare|shortland|Flynn|Maranoa|gippsland|connor|capricornia"
 
-combined_df <- input_df %>% 
+all_topic_scores_df <- paragraphs_df %>% 
   select.(doc_id, electorate, final_alliance, year) %>% 
   left_join.(select.(topic_distributions, -c(V1, year))) %>% 
   pivot_longer.(c(`0`:sym(topic_nums)), names_to = "topic_no", values_to = "score") %>% 
@@ -213,16 +175,47 @@ combined_df <- input_df %>%
   filter.(year > minimum_display_year, 
           !(final_alliance == "Other" & year < 1975)) %>% 
   mutate.(label = paste0(str_pad(topic_no, 2, "left", "0"), "_", label),
-          mining_region = str_detect(electorate, regex(coal_mining_regions, ignore_case = T)))
+          mining_region = str_detect(electorate, regex(coal_mining_regions, ignore_case = T)),
+          labor_mining_region = final_alliance == "Labor" & mining_region == TRUE,
+          country_mining_region = final_alliance == "Country" & mining_region == TRUE)
   
   
 ```
+
+```{r}
+
+
+interesting_labels <-c("environment", "trade", "workers", "supply", "economy", "politics")
+
+discussion_categories_gg <- all_topic_scores_df %>% 
+  process_labs(category, selection = interesting_labels,  party_var = NULL, time_var = era) %>% 
+  left_join(relative_discussion) %>% 
+  summarise.(.by = c(year, category),
+             cat_weighted_paras = sum(weighted_paras)*prop) %>% 
+  distinct.() %>% 
+  ggplot() +
+  geom_col(aes(year, cat_weighted_paras, fill = category)) +
+    basic_add_ons +
+  scale_fill_manual(values = category_colours) +
+  labs(y = "Discussion level", fill = "Category") + 
+  eras_add_on 
+  
+  
+
+ggsave("coal_output/images4paper/discussion_level_categories.png", discussion_categories_gg)
+
+discussion_categories_gg
+
+```
+
+
+
 
 
 
 ```{r}
 
-combined_df %>% 
+all_topic_scores_df %>% 
   count.(mining_region, final_alliance) %>% 
   mutate.(.by = mining_region, prop = scales::percent(N/sum(N))) %>% 
   filter.(mining_region == TRUE)
@@ -237,173 +230,58 @@ combined_df %>%
 (Replicating MH's Fig. 10)
 
 
-```{r}
+```{r, width= 11}
 
-plot_differences <- function(main_var) {
-  
-  
-  main_score_df <- combined_df %>% 
-    summarize.(.by = {{ main_var }},
-               main_score = sum(score))
-  
-  
-  get_diffs_by <- function(group_var) {
-  
-  group_scores <- combined_df %>% 
-    summarize.(.by = {{group_var}}, party_total_score = sum(score))
-  
-  combined_df %>% 
-    summarize.(.by = c({{group_var}}, {{ main_var }}, superlabel),
-               party_lab_score = sum(score)) %>% 
-    left_join.(group_scores) %>% 
-    mutate.(lab_prop_party = party_lab_score/party_total_score) %>% 
-    mutate.(.by = {{ main_var }}, lab_av_prop = mean(lab_prop_party)) %>% 
-    mutate.(diff = (lab_prop_party - lab_av_prop) * 100,
-            diff_abs = abs(diff)) %>% 
-    filter(!is.na(superlabel)) %>% 
-    rename(common_group = {{ group_var }})
-  
-  }
-  
-  
-  lab_props_party <- get_diffs_by(final_alliance)
-  
-  lab_props_region <- get_diffs_by(mining_region) %>% 
-    mutate.(common_group = ifelse.(common_group == TRUE, 
-                                   "Coal region", 
-                                   NA_character_)) %>% 
-    filter.(!is.na(common_group))
-  
-  # browser()
-    
-  cat("Differences range:", range(lab_props_party$diff), "\n")
-  
-  plot_df <- lab_props_party %>%
-    bind_rows.(lab_props_region) %>% 
-    mutate.(
-      # {{ main_var }} := str_trunc({{ main_var }}, 20, ellipsis = "."),
-      {{ main_var }} := fct_rev(factor({{ main_var }}, 
-                                       sort(unique({{ main_var }})))),
-      common_group := fct_relevel(common_group, c(party_names, "Coal region"))
-    ) %>% 
-    slice_max.(diff_abs, 20) %>% 
-    droplevels()
-  
-  
-  max_diff <- max(plot_df$diff_abs)
-  
-  ggplot(plot_df) +
-    geom_col(
-      aes({{ main_var }}, diff, fill = common_group),
-      position = "dodge",
-      show.legend = F
-    ) +
-    coord_flip() +
-    facet_wrap(~common_group, nrow = 1) +
-    labs(x = "", y = "Difference from average") +
-    geom_abline(slope = 0, intercept = 0) +
-    scale_y_continuous(limits = c(-max_diff, max_diff),
-                       # labels = c(-5, -2.5, 0, 2.5, 5),
-                       # breaks = c(-5, -2.5, 0, 2.5, 5)
-    ) +
-    theme(
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_blank(),
-      axis.line = element_line(colour = "black")
-    ) +
-    basic_add_ons
+party_gg <- plot_differences(label)
+
+g <- ggplot_gtable(ggplot_build(party_gg))
+
+
+strip_both <- which(grepl('strip-', g$layout$name))
+fills <-  c(party_colours, "darkgoldenrod4", "darkred")
+
+strips <- which(grepl('strip-', g$layout$name))
+
+
+for (i in seq_along(strips)) {
+  k <- which(grepl('rect', g$grobs[[strips[i]]]$grobs[[1]]$childrenOrder))
+  g$grobs[[strips[i]]]$grobs[[1]]$children[[k]]$gp$fill <- fills[i]
   
 }
 
 
-```
+grid::grid.newpage()
+grid::grid.draw(g)
 
 
-```{r}
 
-plot_differences(label)
+ggsave("coal_output/images4paper/party_diffs.png", g)
 
-
-```
-
-
-  
-```{r}
-
-plot_differences(superlabel)
-
-```
-
-  
-  
-  
-  
-```{r}
-
-
-process_labs <- function(df, 
-                         main_var,
-                         selection, 
-                         party_var = final_alliance,
-                         time_var = legislature) {
-  
-  
-  
-  if(selection == "all") {
-    
-    selection <- unique(pull(df, {{ main_var }}))
-    
-  }
-  
-  lab_df <- df %>%
-    filter.(year > minimum_display_year) %>% 
-    summarize.(.by = c(year, {{ time_var }}, {{ party_var }}, {{ main_var }}),
-               label_score = sum(score)) %>%
-    mutate.(.by = c(year, {{ party_var }}), 
-            yr_prop = label_score / sum(label_score)) %>% 
-    mutate.(.by = c({{ time_var }}, {{ party_var }}, {{ main_var }}),
-            prop = mean(yr_prop)) %>% 
-    filter.({{ main_var }} %in% selection) 
-  
-  
-}
-
-
-plot_w_legislature <- function(df, 
-                               main_var,
-                               party_var = "final_alliance") {
-  
-
-  df %>% 
-    ggplot() +
-    geom_rect(data = filter(aus_pms, start_year > minimum_display_year), colour=NA, show.legend=FALSE,
-              aes(xmin=start_year, xmax= end_year, ymin = -Inf, ymax = Inf,
-                  fill=simple_party), alpha=0.15) +
-    geom_line(aes_string("year", "prop", colour = party_var)) +
-    facet_wrap(deparse(substitute(main_var))) +
-    basic_add_ons +
-    scale_x_continuous(expand = c(0, 0)) +
-    labs(x = "", y = "Proportion of topic discussion per year") +
-    {if(!is.null(party_var)) scale_colour_manual(values = party_colours[names(party_colours) %in% unique(df$final_alliance)]) } +
-    guides(colour = "none")
-  
-  
-}
 
 ```
 
 
-### Manually aggregated superlabels
+  
+```{r}
+
+# plot_differences(category)
+
+```
+
+ 
+
+### Manually aggregated categorys
 
 ```{r}
 
-interesting_labels <- c("environment", "trade", "regulation", "workers", "industry", "infrastructure")
 
-combined_df %>% 
-  process_labs(superlabel, interesting_labels) %>% 
-  plot_w_legislature(superlabel)
 
+all_topic_scores_df %>%
+  process_labs(category, interesting_labels) %>%
+  plot_w_legislature(category)
+
+
+# ggsave("coal_output/images4paper/four_cats_party.png")
 
 ```
 
@@ -412,49 +290,37 @@ combined_df %>%
 
 ```{r}
 
-combined_df %>% 
-  process_labs(superlabel, 
-               interesting_labels, 
-               party_var = NULL, 
-               time_var = era) %>% 
-  plot_w_legislature(superlabel, NULL)
+six_cats_gg <- all_topic_scores_df %>%
+  process_labs(category,
+               interesting_labels,
+               party_var = NULL,
+               time_var = legislature) %>%
+  ggplot() +
+  geom_line(aes(year, prop, colour = category)) +
+  basic_add_ons +
+  scale_colour_manual(values = category_colours) +
+  eras_add_on +
+  plot_gov_add_on +
+  labs(y = "", colour = "Category")
+  
+  
+ggsave("coal_output/images4paper/six_categories.png", six_cats_gg)
+
+six_cats_gg
 
 ```
 
 
 
-### TF-IDF 'best superlabels'
+### TF-IDF 'best categories'
 
 best used to "confirm" that we're not selecting the wrong thing.
 
 ```{r}
 
-combined_df %>%
-  process_labs(most_relevant_tfidf, "all", NULL) %>%
-  plot_w_legislature(most_relevant_tfidf, NULL)
-
-
-```
-
-### MH-style supercategory
-
-```{r}
-
-combined_df %>% 
-  filter.(!is.na(category)) %>% 
-  process_labs(category, "all") %>% 
-  plot_w_legislature(category)
-
-
-```
-
-
-```{r}
-
-combined_df %>% 
-  filter.(!is.na(category)) %>% 
-  process_labs(category, "all") %>% 
-  plot_w_legislature(category)
+all_topic_scores_df %>%
+  process_labs(most_relevant_Eurovoc_label, "all", NULL) %>%
+  plot_w_legislature(most_relevant_Eurovoc_label, NULL)
 
 
 ```
@@ -466,8 +332,8 @@ combined_df %>%
 ```{r}
 
 
-plot_df <- combined_df %>% 
-  filter.(!is.na(superlabel)) %>% 
+plot_df <- all_topic_scores_df %>% 
+  filter.(!is.na(category)) %>% 
   process_labs(label, 
                "all", 
                party_var = NULL, 
@@ -480,9 +346,11 @@ for(subl in unique(plot_df$label)) {
   print(plot_df %>% 
     filter.(label == subl) %>% 
     plot_w_legislature(label, NULL) +
-    guides(colour = "none"))
+    guides(colour = "none")) 
   
 
+  # ggsave(paste0("coal_output/images4paper/all_", subl, ".png"))
+  
 }
 
 
@@ -500,8 +368,8 @@ for(subl in unique(plot_df$label)) {
 ```{r}
 
 
-label_plot <- combined_df %>% 
-  filter.(!is.na(superlabel)) %>% 
+label_plot <- all_topic_scores_df %>% 
+  filter.(!is.na(category)) %>% 
   # filter.(final_alliance %in% c("Liberal", "Labor")) %>% 
   process_labs(label, "all")
 
@@ -513,10 +381,16 @@ for(subl in unique(label_plot$label)) {
   
   print(label_plot %>% 
     filter.(label == subl) %>% 
+      {if(str_detect(subl, "taxes")) filter.(., year > 1917) else .} %>% 
     plot_w_legislature(label) +
+    theme(text = element_text(size=20)) +
+      labs(y = "") +
     guides(colour = "none"))
   
 
+  if(str_detect(subl, "taxes|budget|climate change|disasters|big business|farming|electorate|coalminers|infrastructure|carbon"))
+  
+  ggsave(paste0("coal_output/images4paper/party_", subl, ".png"))
   
 }
 
@@ -524,5 +398,3 @@ for(subl in unique(label_plot$label)) {
 ```
 
   
-
-

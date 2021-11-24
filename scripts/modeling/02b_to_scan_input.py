@@ -18,8 +18,8 @@ random.seed(42)
 data = pd.read_csv(open("final_1000_40000.tsv", 'r'), sep="\t")
 vocab = [l.strip() for l in open("vocab_1000_40000.txt", 'r').readlines()]
 yearidx=-1
-datecol="date"
-outfile="scan.dat"
+datecol="year"
+outfile="corpus.txt"
 
 # for GER data
 #data = pd.read_csv(open("./bundestag_data/final_300_6000.tsv", 'r'), sep="\t")
@@ -28,7 +28,7 @@ outfile="scan.dat"
 #datecol="Date"
 #outfile="bundestag_data/scan/scan.dat"
 
-data[datecol] = data[datecol].apply(lambda x: int(x.split("-")[yearidx]))
+# data[datecol] = data[datecol].apply(lambda x: int(x.split("-")[yearidx]))
 
 # be sure we're in order!!
 data = data.sort_values(by=datecol)

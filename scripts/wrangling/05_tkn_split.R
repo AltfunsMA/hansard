@@ -17,6 +17,7 @@ debug <- FALSE
 cargs <- commandArgs(trailingOnly = T)
 
 
+
 if (length(cargs) == 0) {
   
   filename <- "repr_rights_data/04_model_inputs/repr_rights_hans_so.csv"
@@ -57,9 +58,9 @@ if (length(cargs) == 0) {
   }
   
   
-} else if(!length(cargs) %in% c(5)) {
+} else if(length(cargs) != 6) {
   
-  stop("Please supply exactly 5 arguments or none for defaults in script:", 
+  stop("Please supply either filename and regex, all 5 arguments below or none for defaults in script:", 
        paste0("\n - ", c("input df filepath (CSV)",
                         "text variable name",
                         "unique id variable name",
@@ -187,7 +188,7 @@ out_df %>%
   count.(database) %>% 
   print()
 
-data.table::fwrite(final_df, out_path)
+data.table::fwrite(out_df, out_path)
 
 cat("\n\n Saved file under", out_path, "\n\n")
 cat("DONE\n")

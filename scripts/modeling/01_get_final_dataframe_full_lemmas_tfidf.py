@@ -1,4 +1,4 @@
-#! .env/bin/python
+#! .env/bin/python -u
 
 import csv
 import spacy
@@ -13,11 +13,13 @@ data_path = os.environ['MODEL_INPUTS']
 
 os.chdir(data_path)
 
+print("Now operating in :" + os.getcwd())
+
 nlp = spacy.load("en_core_web_sm")
-nlp.remove_pipe("tagger")
+# nlp.remove_pipe("tagger")
 nlp.remove_pipe("parser")
 nlp.remove_pipe("ner")
-nlp.add_pipe(nlp.create_pipe('sentencizer'))
+nlp.add_pipe('sentencizer')
 
 def clean_df(path):
     data = pd.read_csv(open(path, 'r'))
@@ -34,11 +36,12 @@ def clean_df(path):
     data=data[(data.main_text.astype(str).str.len()>100)]
     data["lengths"]    = data["main_text"].apply(lambda x: len(x.split(" ")))
     # store clean one
-    data.to_csv("coal_clean_df.tsv", sep="\t", index=False)
+    data.to_csv("clean_df.tsv", sep="\t", index=False)
 
 
-def get_coal_docs(path, max_length=5000):
-    coal_docs = []
+def get_short_docs(path, max_length=5000):
+    print("Getting docs in shorter chunks")
+    short_docs = []
     data = pd.read_csv(open(path, 'r'), sep="\t")
     for i,l in data.iterrows():
         txt = [w for w in l["main_text"].split(" ")]
@@ -49,27 +52,27 @@ def get_coal_docs(path, max_length=5000):
                 line = l.copy()
                 line["main_text"] = " ".join(txt[start:end])
                 line["lengths"] = len(line["main_text"].split(" "))
-                coal_docs.append(line)
+                short_docs.append(line)
                 start+=max_length
                 end+=max_length
-                print(len(txt), l["lengths"], start, end, coal_docs[-1]["lengths"])
+                print(len(txt), l["lengths"], start, end, short_docs[-1]["lengths"])
             line = l.copy()
             line["main_text"] = " ".join(txt[start:len(txt)])
             line["lengths"] = len(line["main_text"].split(" "))
-            coal_docs.append(line)
-            print(len(txt), l["lengths"], start, end, coal_docs[-1]["lengths"])
-            print()
-            print()
+            short_docs.append(line)
+        # print(len(txt), l["lengths"], start, end, short_docs[-1]["lengths"])
+        # print()
+        # print()
         else:
-            coal_docs.append(l)
-            
-    with open("short_docs.tsv", 'w+') as of:
-        pd.DataFrame(coal_docs).to_csv(of, index=False, sep="\t")
+            short_docs.append(l)
+        `
+with open("short_docs.tsv", 'w+') as of:
+    pd.DataFrame(short_docs).to_csv(of, index=False, sep="\t")
     
 
 
 def apply_spacy(path, chunksize=5000):
-    
+    print("Applying spacy...") 
     data = pd.read_csv(open(path, 'r'), sep="\t")
       
     start=0
@@ -93,7 +96,8 @@ def apply_spacy(path, chunksize=5000):
         chunk.to_csv(of, index=False, sep="\t")
     
     
-def tfidf(dir_path, max_df=40000, min_df=1000, stop_words=None, max_features=3000, store_underscores=False):
+def tfidf(dir_path, max_df=40000, min_df=1000, stop_words=None, max_features=3000, 
+    store_underscores=False):
     
     from spacy.lang.en.stop_words import STOP_WORDS as SPACY_STOP_WORDS
     
@@ -101,7 +105,7 @@ def tfidf(dir_path, max_df=40000, min_df=1000, stop_words=None, max_features=300
     BIGRAMS = [' '.join([l.lemma_.lower()  for l in nlp(w)]) for w in BIGRAMS]
     STOPWORDS = set([w.strip() for w in open("STOPWORDS.txt", 'r').readlines()] + list(SPACY_STOP_WORDS))
     
-    print(BIGRAMS)
+    # print(BIGRAMS)
     
     
     if not os.path.exists(dir_path + "all_with_spacy.tsv"):
@@ -141,7 +145,7 @@ def tfidf(dir_path, max_df=40000, min_df=1000, stop_words=None, max_features=300
             if big in l:
                 FOUND_BIGRAMS[big]+=1
                 break
-    print(FOUND_BIGRAMS)
+    # print(FOUND_BIGRAMS)
     print("bigrams filtered!")
     
     
@@ -163,13 +167,12 @@ def tfidf(dir_path, max_df=40000, min_df=1000, stop_words=None, max_features=300
         all_chunks.to_csv(of, index=False, sep="\t")
     
         
-    
-    
 
 def main():
-    # clean_df("coal_full_downloaded.csv")
-    # get_coal_docs("coal_clean_df.tsv", max_length=5000)
-    # apply_spacy("short_docs.tsv")
+  
+    clean_df(os.environ['HANSARD_MAIN'] + "_full_downloaded.csv")
+    get_short_docs("clean_df.tsv", max_length=5000)
+    apply_spacy("short_docs.tsv")
     tfidf("./")
     os.chdir(current_path)
     

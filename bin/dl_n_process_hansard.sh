@@ -10,21 +10,23 @@ main_folder=$1
 
 test_run=$2
 
+mentions_str=$3
+
 current_folder=$PWD
 
 cd /data/hansard || exit
 
 scripts/wrangling/01_prep_n_dl_hans_records.R $main_folder $test_run
 
-scripts/wrangling/03_clean_downloads.R $main_folder
+scripts/wrangling/03_clean_downloads.R $main_folder &&
 
-scripts/wrangling/04_get_hansard_single_orator.R
+scripts/wrangling/04_get_hansard_single_orator.R $main_folder $mentions_str &&
 
-scripts/wrangling/05_tkn_split.R
+scripts/wrangling/05_tkn_split.R ${main_folder}_data/04_model_inputs/${main_folder}_hans_so.csv 300 600 main_text system_id $mentions_str &&
 
-scripts/wrangling/06_find_missing_parties.R
+scripts/wrangling/06_find_missing_parties.R &&
 
-scripts/wrangling/07_save_party_alliances.R
+scripts/wrangling/07_save_party_alliances.R &&
 
 cd $current_folder || exit
 

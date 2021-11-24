@@ -1,0 +1,111 @@
+```{r}
+# series_id == A2717939F is the simplest most comprehensive for coal
+
+
+
+# check_series_name(trade, "\\bnatural gas\\b")
+
+
+```
+
+
+```{r}
+# quick_plot_series(trade, "coal", A1827829F, A2717939F)
+
+```
+
+
+
+```{r}
+# quick_plot_series(trade, "iron", A1827853F, A1828430W)
+
+```
+
+
+```{r}
+
+# 
+# quick_plot_series(trade, "agriculture", A1828377W, A1827810F)
+
+
+```
+
+```{r}
+
+# quick_plot_series(trade, "education", A3356356K, A2716854A, A3356359T)
+
+# A3356360A educational services is largely empty
+# A3356322L charges for the use of intellectual property
+
+```
+
+
+
+```{r}
+# quick_plot_series(trade, "combined", A2716854A, A2717939F, A1828377W, A1828430W, A2717898W)
+```
+
+
+
+#### Quickplots
+
+```{r}
+
+# quick_plot_series(industrial, "disputes", A2540871J)
+
+
+```
+
+#### check series
+
+```{r}
+# check_series_name(industrial, "\\bcoal\\b")
+
+
+# # 
+# check_series_name(wages, "manufactur")
+# 
+# 
+# check_series_name(labour_force, "employed total")
+
+
+```
+
+```{r}
+
+# quick_plot_series(wages, "wages", A2705060V, A2712242R, A2602939F)
+
+```
+
+
+
+```{r}
+# industrial %>% 
+#   mutate.(year = year(date)) %>%
+```
+
+
+```{r}
+
+# quick_plot_series(wages, "wages", A2705060V, A2712242R, A2602939F)
+
+```
+
+
+
+```{r}
+# quick_plot_series(labour_force, "trades", A84603939T, A84090259X)
+```
+
+
+```{r}
+# quick_plot_series(labour_force, "total employed", A84920190L, A84603939T, A84932417T, A83901699C, A84596220L, A84602394K, A84591912K, A84596193T, A84595103J, A84090278F)
+
+```
+
+```{r}
+
+# quick_plot_series(labour_force, "employed", A84591912K)
+
+
+```

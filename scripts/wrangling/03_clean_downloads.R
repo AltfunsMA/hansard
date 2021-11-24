@@ -3,9 +3,8 @@
 # Alfonso Martínez Arranz
 # R 3.6.1
 
-library(tidyverse)
-library(tidytable)
-library(data.table)
+pacman::p_load(tidyverse, tidytable, lubridate, data.table)
+
 
 cargs <- commandArgs(trailingOnly = T)
 
