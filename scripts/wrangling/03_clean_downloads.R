@@ -13,7 +13,7 @@ main_folder <- cargs[1]
 
 if (length(cargs) == 0) {
   
-  main_folder <- 'repr_rights'
+  main_folder <- 'general'
 
 
 }
@@ -141,7 +141,8 @@ out <- final_df %>%
   
 if (nrow(out) > 20000) {
   
-  split_out <- split(rep(1:5, length.out = nrow(.), each = ceiling(nrow(.)/5))) 
+  split_out <- out %>% 
+    split(rep(1:5, length.out = nrow(.), each = ceiling(nrow(.)/5))) 
   
 names(split_out) <- map_chr(split_out, ~paste0(min(.x$year), "_", max(.x$year)))
 

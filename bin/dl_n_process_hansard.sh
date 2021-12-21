@@ -6,6 +6,26 @@
 # 2. Create a folder '{hansard_project}/{main_folder}_data/01_records'
 # 3. Move the CSV records to that folder and run this script
 
+this_script=$(basename "$0")
+
+lockfile=/var/lock/${this_script%.sh}.lock
+
+trap "rm -f $lockfile" EXIT
+
+if [[ -e $lockfile  ]]; then
+
+	echo "Lockfile '$lockfile' found. $this_script most likely already running."
+
+	exit
+
+fi
+  
+echo $$ >> "$lockfile"
+
+echo "$lockfile created with PID: $$"
+
+
+
 main_folder=$1
 
 test_run=$2

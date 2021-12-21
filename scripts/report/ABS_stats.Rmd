@@ -1,0 +1,498 @@
+---
+title: "Australian coal Hansard statistics"
+author: "Alfonso M Arranz"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+    df_print: paged
+---
+
+```{r, echo = FALSE}
+pacman::p_load(readabs, ggtext, tibble, tidytable, scales, stringr, forcats, purrr, ggplot2, lubridate, tibble, zoo, deeptime)
+
+source("scripts/report/coal_topics_FUNS.R")
+
+
+early_prod_n_jobs <- fread.("coal_data/general_stats/auscoal_1901_1980_prod_n_workforce.csv")%>% 
+  janitor::clean_names()
+
+late_jobs <- fread.("coal_data/general_stats/ABS_coal_employees_series_A84602523V.csv")
+
+industrial <- fread.("coal_data/general_stats/ABS_industrial_disputes_6321.0.55.001.csv")
+
+main_eras <- c(1935, 1963, 2005)
+
+
+population <- fread.("coal_data/general_stats/aus_total_pop.csv")
+
+# wages <- read_abs(6345.0) %>% 
+#     mutate.(year = year(date))
+# 
+
+# the main wages spreadsheet is not downloading
+earnings_series_ids <- readr::read_lines("/data/hansard/coal_data/general_stats/abs_earnings_series_ids.txt")
+
+
+# earnings <- map_dfr.(earnings_series_ids, read_abs_series)
+# 
+# fwrite.(earnings, "coal_data/general_stats/abs_earnings.csv")
+
+earnings <- fread.("coal_data/general_stats/abs_earnings.csv")
+
+
+labour_force <- fread.("coal_data/general_stats/ABS_labour_detailed_6291.0.55.001.csv")%>% 
+    mutate.(year = year(date))
+
+trade <- fread.("coal_data/general_stats/ABS_trade_5368.0.csv") %>% 
+    mutate.(year = year(date))
+
+# 
+# basic_add_ons <- list(labs(x = ""),
+#                     geom_vline(xintercept = main_eras, linetype = "dashed"))
+
+
+wb_deflator <- readr::read_csv("coal_data/general_stats/WB_1961_2021_deflator_data.csv")
+ 
+aus_deflator <- wb_deflator %>% 
+  janitor::clean_names() %>% 
+  filter.(country_name == "Australia") %>% 
+  pivot_longer.(x1960:x2020, names_to = "year") %>% 
+  mutate.(year = as.numeric(str_remove(year, "x"))) %>% 
+  select.(year, deflator = value)
+
+
+
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, results = 'asis', cache.lazy = FALSE, width = 9)
+
+```
+
+
+
+#### Tax 
+
+```{r, height = 6}
+tax <- fread.("/data/hansard/coal_data/general_stats/ATO_industry_tax_clean.csv")
+
+corporate_tax_rate <- 0.3
+
+tax_plot <- tax %>% 
+  mutate.(across.(where(is.character), ~str_remove_all(.x, ",")),
+    sector = str_remove(str_extract(`Broad industry`, "\\. [A-Za-z]+"), "\\. "),
+    year = year(as.Date(paste0(str_extract(`Income year`, "^\\d{4}"), "-01-01"))),
+          tax_millions = as.numeric(`Taxable Income or Loss`)/10**6, .keep = "none")
+  
+
+outplot <- tax_plot %>% 
+  left_join.(aus_deflator) %>% 
+  filter.(year >= min(tax_plot$year)) %>% 
+  mutate.(sector = fct_other(sector, keep = c("Mining", "Manufacturing", "Construction", "Education"))) %>% 
+  summarize.(.by = c(sector, year),
+             tax_billions = sum(tax_millions)/1000/(deflator/100)) %>% 
+    filter.(sector != "Other") %>% 
+    ggplot() +
+    geom_line(aes(year, tax_billions, colour = sector, group = sector), size = 1) +
+  tax_add_ons +
+  scale_y_continuous(labels = dollar_format(suffix = "bn", accuracy = 1))
+
+library(ggpubr)
+
+
+legend <- get_legend(outplot +
+  theme(text = element_text(size = 12)))
+
+as_ggplot(legend)
+
+
+ggsave(paste0("coal_output/images4paper/mining_money_legend.png"), height = 1.25, width = 1.75)
+```
+
+
+```{r}
+outplot +
+  theme(legend.position = "none") 
+
+ggsave(paste0("coal_output/images4paper/taxable_income.png"))
+
+
+```
+
+
+
+
+#### average weekly earnings
+
+
+```{r, height = 6}
+
+clean_sector <- function(s) {
+  
+  s %>%
+    str_extract("[A-Za-z ]+;$") %>%
+    str_remove(" ;") %>%
+    str_squish() %>%
+    str_extract("^[A-Za-z]+")
+  
+  
+}
+
+key_sector_earnings <- earnings %>% 
+  mutate.(year = year(date),
+    sector = clean_sector(series),
+          sector = fct_other(sector, keep = c("Mining", "Manufacturing", "Construction", "Education"))) %>% 
+  filter.(sector != "Other") %>% 
+  summarize.(.by = c(year, sector), awe = mean(value)/1000)
+
+
+key_sector_earnings %>% 
+  filter.(year < 2021) %>% 
+  ggplot() +
+  geom_line(aes(year, awe, colour = sector), size = 1) +
+  tax_add_ons +
+  labs(y = "") +
+  geom_vline(xintercept = 2005, linetype = "dashed", size = 1) +
+  theme(legend.position = "none") +
+  scale_y_continuous(labels = dollar_format(suffix = "K", accuracy = 0.1)) +
+    scale_x_continuous(breaks = c(1995, 2000, 2005, 2010, 2015, 2020), labels = label_number(accuracy = 1, big.mark = ""), expand = c(0.01, 0.6))
+
+ggsave("coal_output/images4paper/average_weekly_earnings.png")
+
+
+
+```
+
+
+
+
+### employment by sector
+
+```{r}
+recent_jobs <- labour_force %>% 
+  filter.(series_id %in% c("A84602217W", "A84602523V", "A84602514T", "A84603939T", "A84090259X", "A84602319K")) %>% 
+  mutate.(year = year,
+          sector = simple_series_name(series),
+    employees = value*1000) %>% 
+select.(year, sector, employees, series_id)
+
+
+
+recent_jobs %>% 
+  distinct.(series_id, sector)
+
+```
+
+
+
+```{r, height = 6}
+
+wks_in_yr <- 52
+
+recent_jobs %>% 
+  mutate.(sector = dplyr::recode(sector, "All mining" = "Mining",
+                          "Technicians" = "Construction", 
+                          "Higher ed." = "Education")) %>% 
+  summarize.(.by = c(year, sector), employees = mean(employees)) %>% 
+  left_join.(key_sector_earnings) %>% 
+  left_join.(aus_deflator) %>% 
+  filter.(year >= min(key_sector_earnings$year)) %>% 
+  filter.(sector %in% c("Mining", "Manufacturing", "Construction", "Education")) %>% 
+  mutate.(year_income = (awe * wks_in_yr)/(deflator/100),
+          tax_bracket = case_when.(year_income > 18000 ~ 0.15,
+                                   year_income > 34000 ~ 0.32,
+                                   year_income > 80000 ~ 0.4,
+                                   year_income > 180000 ~ 0.45),
+    income_tax = employees * year_income) %>% 
+  filter.(year < 2021) %>% 
+  ggplot() +
+  geom_line(aes(year, income_tax, colour = sector), size = 1) +
+  tax_add_ons +
+    geom_vline(xintercept = 2005, size = 1, linetype = "dashed") +
+    theme(legend.position = "none")  +
+    scale_x_continuous(breaks = c(1995, 2000, 2005, 2010, 2015, 2020), labels = label_number(accuracy = 1, big.mark = ""), expand = c(0.01, 0.6)) +
+  scale_y_continuous(labels = dollar_format(suffix = "bn", accuracy = 0.1, scale = 10e-9))
+  
+  
+
+ggsave(paste0("coal_output/images4paper/salary_mass.png"))
+    
+```
+
+
+
+```{r}
+early_jobs <- early_prod_n_jobs %>% 
+  select.(year, Coal = coal, `All mining` = all_mining) %>% 
+  pivot_longer.(-year, names_to = "sector", values_to = "employees")
+  
+
+final_jobs <- recent_jobs %>% 
+  bind_rows.(early_jobs) %>% 
+  summarize.(.by = c(year, sector), 
+             jobs = mean(employees, na.rm = T))
+```
+
+
+
+
+```{r}
+
+#### Coal-only jobs
+
+# final_jobs %>% 
+#   filter.(sector == "Coal", year < 2021) %>% 
+#   ggplot(aes(year, jobs)) +
+#   geom_line() +
+#   geom_point(size = 0.5) +
+#   labs(x = "", y = "total workers") +
+#     scale_y_continuous(labels = unit_format(
+#     suffix = "K",
+#     scale = 1e-3,
+#     accuracy = 1
+#   )) +
+#   basic_add_ons
+
+
+# ggsave(paste0("coal_output/images4paper/coal_workers.png"))
+
+```
+
+
+
+
+
+#### Multi-sector jobs
+
+
+```{r}
+
+multisector <- final_jobs %>%
+  mutate.(.by = sector,
+          jobs = na.approx(jobs, na.rm = FALSE, maxgap = 20)) %>%
+  left_join.(population) %>% 
+  mutate.(jobs = jobs/pop) %>% 
+  ggplot(aes(year, jobs, colour = sector)) +
+  geom_line() +
+  geom_point(size = 0.5) +
+  scale_y_continuous(labels = percent_format(
+    # suffix = "K",
+    # scale = 1e-3,
+    accuracy = 1
+  )) +
+  labs(x = "", y = "of total population") +
+  scale_colour_manual(
+    values = c(
+      "Technicians" = "darkgreen",
+      "Manufacturing" = "orange",
+      "Metal ores" = "darkred",
+      "Coal" = "black",
+      "All mining" = "blue",
+      "Higher ed." = "deeppink"
+    )
+  ) +
+  basic_add_ons + 
+  eras_add_on
+
+
+ggsave(paste0("coal_output/images4paper/workers_per_total.png"), multisector)
+
+multisector
+
+```
+
+#### Early production values
+
+```{r}
+
+imperial_2_metric_tonnes <- 1.02
+
+early_prod_to_combine <- early_prod_n_jobs %>% 
+  filter.(year < 1961) %>% 
+  select.(year, `black, of which:` = black, brown) %>% 
+  pivot_longer.(-year, names_to = "type") %>% 
+  mutate.(value = imperial_2_metric_tonnes*value*1000)
+
+early_prod_gg <- early_prod_to_combine %>% 
+  mutate.(type = str_replace(type, "black, of which:", "black")) %>% 
+  ggplot() +
+  geom_line(aes(year, value, colour = type)) +
+  scale_colour_manual(values = c("black", brown_coal_colour)) +
+  labs(x = "", y = "", colour = "Coal type") +
+  scale_y_continuous(labels = unit_format(unit = "M", accuracy = 1, scale = 1e-03)) +
+    geom_vline(xintercept = 1935, linetype = "dashed") +
+  # basic_add_ons +
+  eras_add_on +
+  theme(legend.position = "bottom",
+        text = element_text(family = "serif"))
+
+
+
+ggsave("coal_output/images4paper/early_production.png", early_prod_gg)
+
+
+early_prod_gg
+
+```
+
+#### full period production values and jobs
+
+```{r}
+
+
+late_prod_n_exports <-  fread.("coal_data/general_stats/auscoal_1961_2020_prod_n_exports_kilotonnes.csv") %>% 
+  mutate.(across.(-year, ~as.numeric(str_remove(.x, ","))),
+          year = as.numeric(str_extract(year, "^[0-9]{4}")),
+          across.(contains("coal"), ~.x/1000))
+
+type_order <- names(late_prod_n_exports)
+
+prod_exports_df <- late_prod_n_exports %>%
+  pivot_longer.(-year, names_to = "type") %>%
+  bind_rows.(early_prod_to_combine) %>%
+  mutate.(type = fct_relevel(type, type_order[type_order != "year"]))
+
+#   ggplot(prod_exports_df) +
+  # basic_add_ons + 
+#   geom_line(aes(year, value, colour = type)) +
+#   scale_colour_manual(values = c("black", "grey40", "blue3", "darkorchid3", "darkred")) +
+#   labs(x = "", y = "Metric tonnes", colour = "Coal type") +
+#   scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-03)) +
+#   basic_add_ons
+
+# ggsave(paste0("coal_output/images4paper/prod_exports_1901_2020.png"))
+
+
+```
+
+
+#### Combined jobs and production
+
+
+```{r}
+
+
+ylim.prim <- c(0, 450)  
+ylim.sec <- c(0, 55) 
+
+
+b <- diff(ylim.prim)/diff(ylim.sec)
+a <- ylim.prim[1] - b*ylim.sec[1] 
+
+worker_colour <- "red4"
+jcb_colour <- "darkorchid4"
+
+
+combo_prod_worker <- final_jobs %>% 
+  filter.(sector == "Coal", year < 2021) %>% 
+  left_join.(prod_exports_df) 
+
+
+
+combo_prodwork_gg <- combo_prod_worker %>% 
+  ggplot(aes(x = year)) +
+  geom_line(aes(y = value, colour = type)) +
+  geom_line(aes(y = a + jobs*b), colour = worker_colour) +
+  scale_colour_manual(values = c("black", "grey40", "blue3", "#6dd1e1", brown_coal_colour), 
+                      na.translate = F) +
+  scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-03),
+                      sec.axis = sec_axis(~ (. - a)/b,
+                                          labels = unit_format(unit = "K", scale = 1e-03))) + 
+  labs(x = "", colour = "Coal type") +
+  basic_add_ons +
+  eras_add_on +
+    theme(
+      # legend.position = "bottom",
+      
+          axis.title = element_blank(),
+          axis.text.y.right = element_text(color = worker_colour),
+      axis.line.y.right = element_line(color = worker_colour), 
+        axis.ticks.y.right = element_line(color = worker_colour),
+        axis.title.y.right = element_text(color = worker_colour)
+    ) +
+  geom_richtext(aes(x = 1920, y = 300000), colour = worker_colour, label = "coal<BR>workers", family = "serif", size = 3, label.color = NA, fill = NA) +
+    geom_richtext(aes(x = 1955, y = 410000), colour = jcb_colour, label = "JCB<BR>programs", family = "serif", size = 3, label.color = NA, fill = NA) +
+  annotate("rect", 
+           fill = jcb_colour, 
+           alpha = 0.1,
+           xmin = 1950, 
+           xmax = 1960, 
+           ymin = -Inf,
+           ymax = Inf) +
+  theme(legend.position = "bottom", legend.box="vertical") + 
+  guides(colour=guide_legend(nrow=2,byrow=TRUE))
+
+ggsave(paste0("coal_output/images4paper/workers_prod_exports.png"), combo_prodwork_gg)
+
+combo_prodwork_gg
+
+```
+
+
+
+#### Trade
+
+
+```{r}
+
+  
+
+top_exports <- trade %>% 
+  filter.(series_id %in% c("A2717939F", "A1828377W", "A1828430W", "A2716854A", "A2717898W", "A1828448V")) %>%
+  mutate.(commodity = simple_series_name(series)) %>% 
+  summarize.(.by = c(year, series_id, commodity), value = sum(value)) %>%
+  left_join.(aus_deflator) %>%
+  mutate.(final_value = value*10**6/(deflator/100),
+          commodity = fct_reorder(commodity, final_value)) %>% 
+  select.(year, commodity, series_id, final_value, deflator)
+
+distinct.(top_exports, series_id, commodity) %>% 
+  mutate.(all = paste0(commodity, ": ", series_id)) %>% 
+  pull.(all) %>% 
+  sort() %>% 
+  cat(sep = ", ")
+
+
+```
+
+```{r}
+
+
+
+cat(unique(top_exports$series_id), sep = ", ")
+
+
+```
+
+
+
+```{r}
+
+top_exports_gg <- ggplot(top_exports) +
+  geom_line(aes(year, final_value, colour = commodity)) +
+  scale_y_continuous(labels = dollar_format(suffix = "bn", scale = 1e-9,
+                                                    accuracy = 1)) +
+  labs(x = "", y = "") +
+  scale_colour_manual(values = c("Iron ore" = "firebrick2", 
+                                 "Coal" = "black", 
+                                 "Higher ed." = "deeppink",
+                                 "Natural gas" = "blue", 
+                                 "Wheat" = "goldenrod2", 
+                                 "Wool" = "darkolivegreen4")) +
+  geom_vline(xintercept = main_eras[3], linetype = "dashed") +
+  theme(text = element_text(family="Serif")) +
+  eras_add_on
+
+
+ggsave(paste0("coal_output/images4paper/export_values.png"), top_exports_gg)
+
+
+top_exports_gg
+
+```
+
+
+
+
+
+
+

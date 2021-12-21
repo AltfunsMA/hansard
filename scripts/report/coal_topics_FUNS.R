@@ -2,6 +2,11 @@
 
 main_eras <- c(1935, 1963, 2005)
 
+elec_period <- 1901:2020
+
+minimum_display_year <- 1900
+
+
 
 party_names <- c("Country", "Greens", "Labor", "Liberal", "Other")
 
@@ -12,6 +17,8 @@ category_colours <- rev(c(workers = "darkred", trade = "blue", supply = "black",
                           politics = "darkorange", environment = "darkgreen",
                           economy = "purple"))
 
+brown_coal_colour <- "tan3"
+
 
 names(party_colours) <- party_names
 
@@ -20,21 +27,21 @@ names(party_colours) <- party_names
 
 aus_pms <- fread.("/data/hansard/terms/aus_pm_parties_clean.csv") %>% 
   arrange.(start_year) %>% 
-  mutate.(end_year = lead(start_year, default = 2022),
+  mutate.(end_year = dplyr::lead(start_year, default = 2022),
           simple_party = fct_relevel(ifelse.(party == "Australian Labor Party", "Labor", "Liberal"), "Labor"))
 
 
 elections <- tibble(year = elec_period) %>% 
-  left_join.(select(aus_pms, start_year, pm), by = c("year" = "start_year")) %>% 
-  fill(pm) %>% 
-  mutate.(legislature = cumsum(replace_na(pm != lag(pm), TRUE)),
+  left_join.(select.(aus_pms, start_year, pm), by = c("year" = "start_year")) %>% 
+  fill.(pm) %>% 
+  mutate.(legislature = cumsum(replace_na.(pm != lag(pm), TRUE)),
           era = cut(year, c(1900, main_eras, 2021)))
 
 
 short_eras_df <- tibble(min_age = c(1901, main_eras),
                   max_age = c(main_eras, 2020),
                   name = c("supply", "work rights", "diversification", "Kyoto"),
-                  # color = c("#D4CB92", "#96031A", "#587792", "#AECAA1")
+                  color = c("beige", "#D4CB92", "beige", "#D4CB92")
 )
 
 long_eras_df <- tibble(min_age = c(1901, 1980),
@@ -50,8 +57,15 @@ eras_add_on <- list(coord_geo(dat = list(short_eras_df, long_eras_df),
           height = list(unit(1, "lines"),
                         unit(1, "lines"))))
 
+eras_add_on <- list(coord_geo(dat = short_eras_df, 
+                              size = 3, 
+                              pos = 'bottom',
+                              height = unit(1, "lines"),
+                              center_end_labels = T))
 
-plot_gov_add_on <- list(geom_rect(data = filter(aus_pms, 
+
+
+plot_gov_add_on <- list(geom_rect(data = filter.(aus_pms, 
                                                 start_year > minimum_display_year), colour=NA, show.legend=FALSE,
                                   aes(xmin=start_year, xmax= end_year, ymin = -Inf, ymax = Inf,
                                       fill=simple_party), alpha=0.15))
@@ -191,9 +205,9 @@ plot_differences <- function(main_var) {
   
   add_formatting <- function(s) {
     case_when(
-      s == "Labor coal" ~ "<span style='font-size:7pt;color:white'>Labor<br>coal</span>",
-      s == "Country coal" ~ "<span style='font-size:7pt;color:white'>Country<br>coal</span>",
-      TRUE ~ as.character(glue("<span style='font-size:8pt;color:white'>{s}</span>")))
+      s == "Labor coal" ~ "<span style='font-size:7pt'>Labor<br>coal</span>",
+      s == "Country coal" ~ "<span style='font-size:7pt'>Country<br>coal</span>",
+      TRUE ~ as.character(glue("<span style='font-size:8pt'>{s}</span>")))
   }
   
   
@@ -284,10 +298,30 @@ process_labs <- function(df,
 plot_w_legislature <- function(df, 
                                main_var,
                                party_var = "final_alliance",
-                               plot_gov = TRUE) {
+                               plot_gov = TRUE,
+                               get_avg_labels = FALSE) {
+  
+  if(get_avg_labels) {
+  
+  prop_df <- df %>% 
+    mutate.(prop_str = scales::percent(prop)) 
   
   
-  df %>% 
+  label_df <- summarize.(prop_df, .by = era, 
+                         year = mean(year), 
+                         prop = mean(prop), 
+                         prop_str = unique(prop_str))
+  
+  } else {
+    
+    prop_df <- df
+    
+    
+    
+  }
+  
+  
+  prop_df %>% 
     ggplot() +
     {if(plot_gov) plot_gov_add_on } +
     geom_line(aes_string("year", "prop", colour = party_var)) +
@@ -296,7 +330,9 @@ plot_w_legislature <- function(df,
     labs(x = "", y = "Proportion per year") +
     {if(!is.null(party_var)) scale_colour_manual(values = party_colours[names(party_colours) %in% unique(df$final_alliance)]) } +
     guides(colour = "none") +
-    theme(panel.spacing.x = unit(6, "mm"))
+    theme(panel.spacing.x = unit(6, "mm")) +
+    {if(get_avg_labels) geom_label(data = label_df, 
+               aes(year, prop, label = prop_str))}
   
   
   

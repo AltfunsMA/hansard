@@ -7,7 +7,7 @@
 # Load up--------
 
 suppressPackageStartupMessages({ 
-library(tidyverse)
+library(tidytable)
 library(lubridate)
 library(rvest)
 library(tidyverse)
@@ -43,7 +43,7 @@ test <- as.logical(cargs[2])
 
 if (is.na(test)) {
 
-  main_folder <- 'feminism'
+  main_folder <- 'general'
   test <- TRUE
   
 }
@@ -91,8 +91,7 @@ names(rec_list) <- str_match(rec_list, "(^\\w+?)_")[,2]
 
 
 
-rec_df <- map_dfr(rec_list, ~read_csv(paste0(source_path, .x), 
-                                      col_types = cols(.default = "c")), 
+rec_df <- map_dfr.(rec_list, ~fread.(paste0(source_path, .x)), 
                   .id = "term") %>% 
   mutate(year = year(dmy(Date))) %>% 
   distinct()
@@ -128,7 +127,7 @@ if(test) {
     group_by(year) %>%
     slice_sample(n = batch_size*2) %>%
     ungroup() %>%
-    # mutate(Permalink = "ERROR ON PURPOSE") %>%
+    # mutate(Permalink = "THIS SHOULD CAUSE ERROR FOR TESTING PURPOSES") %>%
     slice(1)
   
   rec_df_remaining <- rec_df_remaining %>% 

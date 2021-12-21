@@ -9,20 +9,31 @@ texts_w_topics <- paragraphs_df %>%
 
   
 texts_w_topics %>% 
-  filter.(`3` > 0.3) %>% 
+  filter.(`6` > 0.3) %>% 
+  filter(between(year, 1901, 1930), final_alliance == "Liberal") %>% 
   slice_sample.(n=10) %>% 
   pull(main_text)
+
+
+texts_w_topics %>% 
+  filter(grepl("joint coal board", main_text, ignore.case = T), grepl("HOLT", main_text, ignore.case = T)) %>% 
+  pull(main_text)
+
+
+# 
+#    
+# texts_w_topics %>% 
+#   filter.(str_detect(main_text, "trouble"),
+#             str_detect(main_text, "product"), 
+#           final_alliance == "Liberal",
+#   pull(main_text)
   
-texts_w_topics %>% 
-  filter.(str_detect(main_text, "energy policy"), between(year, 1965, 1975),
-          final_alliance == "Liberal") %>% 
-  pull(main_text)
 
 
 
 texts_w_topics %>% 
-  filter.(str_detect(main_text, "Great Barrier Reef"), between(year, 2000, 2020), final_alliance == "Greens") %>% 
-  pull(main_text)
+  filter.(str_detect(main_text, "I met with Xstrata"), between(year, 2005, 2013)) %>% 
+  select(orator, date, main_text)
 
   
 texts_w_topics %>% 
@@ -49,7 +60,7 @@ cat("total term count", sum(counts$counts))
 }
   
 
-count_terms("\\blungs?\\b", 1939, 1949)
+count_terms("\\bpneumoconiosis\\b", 1939, 1960)
 count_terms("\\bwages?\\b", 1939, 1949)
 count_terms("\\baccidents?\\b", 1939, 1949)
 count_terms("\\blong service leave\\b", 1939, 1949)

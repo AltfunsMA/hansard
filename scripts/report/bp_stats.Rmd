@@ -1,0 +1,69 @@
+
+
+For some reason the BP stats look very different from IEA stats and don't have as much information...
+
+```{r}
+
+
+bpdata <- fread.("/data/hansard/coal_data/general_stats/bp-stats-review-2021-consolidated-dataset-panel-format.csv")
+
+
+```
+#### Main consumers in Asia
+
+```{r}
+
+
+main_coal_importers_gg <- bpdata %>% 
+  filter.(Region == "Asia Pacific", Year > 1980, 
+          !is.na(Country)) %>% 
+  filter.(Country %in% c("Japan", "India", "China")) %>% 
+  mutate.(coal_imports = coalcons_ej - coalprod_ej) %>% 
+  slice_max.(.by = Year, coal_imports, n = 3) %>% 
+  ggplot() +
+  geom_line(aes(Year, coalcons_ej, colour = Country)) +
+  scale_y_continuous(labels = label_number(accuracy = 1), name = "EJ") +
+  theme(text = element_text(family="Serif")) +
+  labs(x = "") +
+  scale_colour_manual(values = c("China" = "darkred",
+                                 "India" = "darkgreen",
+                                 "Japan" = "goldenrod1"))
+
+
+
+
+```
+
+
+#### Main exporters worldwide
+```{r}
+
+
+main_coal_exporters_gg <- bpdata %>% 
+  mutate.(Country = ifelse.(CIS == 1, "(former) USSR", Country)) %>% 
+  filter.(Year > 1980, !is.na(Country)) %>% 
+  summarise.(.by = c(Country, Year), 
+             coalprod_ej = sum(coalprod_ej, na.rm = T),
+             coalcons_ej = sum(coalcons_ej, na.rm = T),
+  ) %>% 
+  mutate.(coal_exports = coalprod_ej - coalcons_ej) %>% 
+  filter.(Country %in% c('Australia', "Mongolia", "Indonesia", "(former) USSR")) %>% 
+  ggplot() +
+  geom_line(aes(Year, coal_exports, colour = Country)) +
+  scale_y_continuous(labels = label_number(accuracy = 1), name = "EJ") +
+  theme(text = element_text(family="Serif")) +
+  labs(x = "") +
+  geom_vline(xintercept = main_eras[3], linetype = "dashed") +
+  scale_colour_manual(values = c("Australia" = "goldenrod3",
+                                 "Indonesia" = "red",
+                                 # "Poland" = "White",
+                                 # "South Africa" = "darkgreen",
+                                 "Mongolia" = "darkblue",
+                                 "(former) USSR" = "darkred")) +
+  eras_add_on 
+
+
+
+
+
+```

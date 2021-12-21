@@ -1,0 +1,151 @@
+---
+title: "Australian coal Hansard IEA statistics"
+author: "Alfonso M Arranz"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+    df_print: paged
+---
+
+```{r, echo = FALSE}
+pacman::p_load(ggtext, tidytable, scales, stringr, forcats, purrr, ggplot2, lubridate, tibble, zoo, deeptime)
+
+source("scripts/report/coal_topics_FUNS.R")
+source("scripts/report/iea_FUNS.R")
+
+
+ieacoal <- fread.("/data/hansard/coal_data/general_stats/COAL_WCS-2020-1-EN-20210301T100015.csv")
+
+
+export_by_destination <- fread.("coal_data/general_stats/COAL_EXPORTS-2020-1-EN-20200513T101527.csv")
+
+
+
+ieacoal %>% filter.(FLOW %in% c("IMPORTS", 'EXPORTS')) %>%  distinct.(PRODUCT, FLOW)
+
+
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, results = 'asis', cache.lazy = FALSE, width = 9)
+
+```
+#### Australian export destinations
+
+```{r, echo = FALSE}
+
+exportsaus <- export_by_destination %>% 
+  filter.(Country == "Australia", !is.na(Value), Value > 0, PRODUCT %in% c("HARDCOAL", "BROWN")) %>%
+  mutate.(simple_country = dplyr::recode(Destination, !!!ct_names)) %>% 
+  filter.(simple_country != "Total Exports")
+
+
+top_ausexports <- top_iea_value(exportsaus, N = 6)
+
+top_ausexports
+
+```
+
+
+
+```{r}
+
+aus_exports <- exportsaus %>%
+  mutate.(simple_country = fct_other(simple_country, keep = top_ausexports$simple_country))
+
+# aus_coal_exports_gg <- aus_exports %>% 
+#   basic_jinchukou() +
+#   imports_add_on
+# 
+# 
+# ggsave(paste0("coal_output/images4paper/aus_coal_exports.png"), aus_coal_exports_gg)
+# 
+# aus_coal_exports_gg
+
+```
+
+
+
+#### IEA total coal imports
+
+```{r, rows.print = 40}
+ieaimports <- filt_ieacoal_products("IMPORTS") 
+
+
+top_coal_importers <- ieaimports %>% 
+  top_iea_value(N = 7)
+
+top_coal_importers
+```
+
+
+```{r}
+
+all_imports <- ieaimports %>%
+  # filter.(simple_country %in% top_coal_importers$simple_country) %>%
+  mutate.(simple_country = fct_other(simple_country, keep = top_coal_importers$simple_country))
+# 
+# main_coal_importers_gg <- all_imports %>% 
+#   basic_jinchukou() +
+#   imports_add_on
+
+# 
+
+```
+
+
+```{r, height = 10}
+
+
+aus_global_gg <- bind_rows.(list("Global imports" = all_imports, "Australian exports" = aus_exports), .id = "trade_type") %>% 
+  mutate.(trade_type = fct_relevel(trade_type, "Global imports")) %>% 
+  basic_jinchukou(group_by = c("TIME", "simple_country", "trade_type")) +
+  facet_wrap(~trade_type, scales = "free") +
+  imports_add_on +
+  theme(legend.position = "bottom")
+
+ggsave(paste0("coal_output/images4paper/aus_global_coal.png"), aus_global_gg)
+
+aus_global_gg
+
+
+
+```
+
+
+
+#### IEA total coal exports
+
+
+```{r,  rows.print = 40}
+
+
+ieaexports <- filt_ieacoal_products("EXPORTS") 
+
+top_coal_exporters <- ieaexports %>% 
+  filter.(!str_detect(simple_country, "Africa|Asia|World|European|OECD|Total|IEA|,|:")) %>% 
+  top_iea_value(N = 8)
+
+top_coal_exporters
+
+
+```
+
+
+```{r}
+
+
+main_coal_exporters_gg <- ieaexports %>%
+  filter.(simple_country %in% top_coal_exporters$simple_country) %>%
+  filter.(!simple_country %in% c("Poland")) %>%
+  basic_jinchukou() +
+  imports_add_on +
+  eras_add_on +
+  geom_vline(xintercept = main_eras[3], linetype = "dashed")
+
+
+ggsave(paste0("coal_output/images4paper/main_coal_exporters.png"), main_coal_exporters_gg)
+
+main_coal_exporters_gg
+
+
+```

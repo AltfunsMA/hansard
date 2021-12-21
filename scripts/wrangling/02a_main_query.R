@@ -40,7 +40,7 @@ for (i in 1:batches_n) {
   
   if(is.nan(perc_empty)) next
   
-  if(perc_empty > 0) {
+  if(perc_empty > 25) {
     
     problem_counter <<- problem_counter + 1
     

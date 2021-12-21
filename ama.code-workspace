@@ -2,6 +2,9 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "../news/energy-in-news-media"
 		}
 	],
 	"settings": {}
