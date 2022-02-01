@@ -3,7 +3,8 @@
 # Alfonso Martínez Arranz
 # R 3.6.1
 
-pacman::p_load(tidyverse, tidytable, lubridate, data.table)
+## Set-up ----
+pacman::p_load(tidyverse, tidytable, lubridate)
 
 
 cargs <- commandArgs(trailingOnly = T)
@@ -22,102 +23,51 @@ message("**** Cleaning downloaded Hansard files *****")
 
 recpatt <- if_else(main_folder == 'coal', "All Hansard", '.csv')
 
-records_path <- paste0(main_folder, "_data/01_records")
+records_path <- paste0(main_folder, "_data/01_records/", 
+                       "combined_", main_folder, "_records.csv")
 
 full_text_path <- paste0(main_folder, '_data/02_full_text/')
 
-out_filename <- paste0(main_folder, '_data/04_model_inputs/', 
-                       main_folder, '_full_downloaded')
 
-
-# Appending of rows to files in various batches created mismatches in the order of columns
-# _within_ each file. This function:
-# 1. reads as many rows without misspecification errors from the top file
-# 2. selects Permalink (an URL that acts as ID column. The original records (apart from the text,
-#   the remaining data is the same)) 
-# 3. selects "main text" column 
-# 4. searches for each of those columns individually in the bottom part of the file
-
-read_clean <- function(filepath) {
-  
-  message("Reading", basename(filepath))
-  
-  df <- read_csv(filepath, col_types = 'c')
-  
-  probs <- problems(df)
-  
-  first_probrow <- probs %>% slice(1) %>% pull(row)
-  
-  if(length(first_probrow) < 1) {
-    
-    return(list("success" = select(df, Permalink, main_text)))
-         
-  } 
-  
-  df_top <- read_csv(filepath, n_max = first_probrow-1) %>% 
-    select(Permalink, main_text)
-  
-  df_bottom <- read_csv(filepath, skip = first_probrow,
-                        col_names = FALSE) %>% 
-    select_if(is.character)
-  
-
-  url_ix <- map_lgl(df_bottom, ~all(str_detect(.x, "https://parlinfo.aph")), na.rm = T)
-  
-  text_ix <- map_lgl(df_bottom, ~any(str_detect(.x, "Content Window"), na.rm = T))
-  
-  df_url <- df_bottom[, url_ix] %>% set_names("Permalink")
-  
-  df_text <- df_bottom[, text_ix] %>% set_names("main_text")
-
-  out <- bind_cols(df_url, df_text) %>% 
-    bind_rows(df_top)
-  
-  if(nrow(out) == nrow(df)) { list("success" = out)
-    } else (list("failure" = out))
-  
-  
-}
 
 ## MAIN DOWNLOAD LOOP ---------
+
+message("Loading text...")
 
 fp_full_text <- list.files(full_text_path, pattern = "\\.csv", full.names = T)
 
 if(length(fp_full_text) == 0) stop("No CSV files in ", full_text_path)
 
+text_df <- list()
 
-main_df <- map(fp_full_text, read_clean)
+for (year in seq(1901, 1921, by = 10)) {
 
-out_error <- main_df %>% 
-  map('failure') %>% 
-  compact()
-
-out_success <- main_df %>% 
-  map("success") %>% 
-  compact() %>% 
-  bind_rows()
-
+  out_filename <- paste0(main_folder, '_data/04_model_inputs/', 
+                         main_folder, '_full_downloaded_', year)
+  
+  decade_rx <- cptools::bound_rx(as.character(c(year:(year+9))), "", "")
+  
+  cat(decade_rx, "\n")
+  
+  decade_fp <- fp_full_text[str_detect(fp_full_text, decade_rx)]
+    
+  if(length(decade_fp) > 0) text_df[[as.character(year)]] <- map_dfr.(decade_fp, fread.)
+  
+  
+}
 
 # COMBINATION WITH RECORDS ------
+message("Loading records...")
 
-fp_records <- list.files(records_path, 
-                         pattern = recpatt, full.names = T)
-
-df_records <- map(fp_records, fread) %>% 
-  rbindlist(fill = TRUE)
+df_records <- fread.(records_path)
 
 
-uselss_toptxt <- "\\s*Content Window|\\s*Download Fragment|\\s*Watch ParlView Video"
+
   
-
-final_df <- out_success %>% 
-  filter.(!is.na(main_text)) %>% 
+message("Merging...")
+final_df <- text_df %>% 
   right_join.(df_records, by = "Permalink") %>% 
   distinct.() %>% 
-  mutate.(main_text = str_remove_all(main_text, uselss_toptxt),
-         # A couple of items under "Reference" were misencoded as UTF-8 but aren't
-         # checked with calls below
-        across.(where(is.character), iconv, "UTF-8", "UTF-8", sub = "")) %>% 
   janitor::clean_names() 
   
 
@@ -136,13 +86,18 @@ if(!dir.exists(dirname(out_filename))) dir.create(dirname(out_filename))
 
 out <- final_df %>% 
   mutate.(date = dmy(date),
+          year_month = paste0(year(dmy(date)), "_", month(dmy(date))),
          year = year(date)) %>% 
   arrange.(date)
+
+max_rows_per_df <- 20000
   
-if (nrow(out) > 20000) {
+if (nrow(out) > max_rows_per_df) {
+  
+  max_division <- ceiling(nrow(out)/max_rows_per_df)
   
   split_out <- out %>% 
-    split(rep(1:5, length.out = nrow(.), each = ceiling(nrow(.)/5))) 
+    split(rep(1:max_division, length.out = nrow(.), each = ceiling(nrow(.)/max_division))) 
   
 names(split_out) <- map_chr(split_out, ~paste0(min(.x$year), "_", max(.x$year)))
 
@@ -155,6 +110,12 @@ iwalk(split_out, ~fwrite(.x, paste0(out_filename, "_", .y, ".csv")))
   
   
 }
+
+}
+
+
+}
+
 
 message("DONE")
 

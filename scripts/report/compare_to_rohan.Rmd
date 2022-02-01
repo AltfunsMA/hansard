@@ -1,0 +1,112 @@
+```{r}
+# Alfonso Martinez Arranz 
+## Comparing size of dataset with Rohan Alexander's pre-print and dataset
+# https://arxiv.org/pdf/2111.09299.pdf
+# https://github.com/RohanAlexander/hansard
+
+pacman::p_load(tidyverse, lubridate, tidytable)
+
+
+big_df <- fread.("/data/hansard/general_data/all_combined", select = c("Date", "Permalink"))
+
+get_dates <- function(filenames) {
+  
+filenames %>% 
+    str_remove("\\.pdf|\\.csv") %>% 
+    ymd() %>% 
+    format("%d-%m-%Y")
+  
+}
+
+
+
+```
+
+## Total number of dates
+
+Rohan notes that they were able to download 14,680 PDFs of Hansard data during the period 1901-2018, which correspond to the 14680 sitting days between those dates. However, that only corresponds to 8615 distinct dates.
+
+```{r}
+
+
+sitting_days <- fread.("/data/rohan_hansard/inputs/misc/hansard_dates.csv")
+
+all_dates <- unique(sitting_days$hansardDates)
+
+length(all_dates)
+
+
+
+
+```
+
+
+Using the Permalinks from the metadata, we captured the 8807 distinct dates in our entire dataset, going all the way to 2020.
+
+```{r}
+
+my_dates <- unique(big_df$Date)
+
+length(my_dates)
+
+
+```
+
+In the paper it is claimed that:
+
+“We do not use the XML records or scrape the website for this paper because those records are known to be incomplete but the extent of how incomplete they are is unknown. The trade-off for a more-complete record is the errors introduced by having to parse the PDFs”
+
+University of Canberra’s Tim Sherratt (aka [Wragge](https://github.com/wragge/hansard-xml), linked in Rohan’s notes:
+this repository includes files for the House of Representatives and the Senate from 1901 to 1980 and 1998 to 2005. No XML files are currently available for 1981 to 1997. Open Australia provides access to [Hansard XML files from 2006 onwards](http://data.openaustralia.org.au/).
+
+
+But only one date seems to be missing from our dataset compared to the list of sitting dates:
+
+
+```{r}
+
+setdiff(get_dates(all_dates), my_dates)
+
+
+```
+
+
+Looking at the URLs actually downloaded also confirms this general ballpark.
+
+```{r}
+
+
+pdf_dates_in_hors <- fread.(paste0(rohan_addresses, "/URLs_for_00s-80s_PDFs.csv"),
+                    select = "file_name") %>% 
+  pull(file_name) %>% 
+  get_dates()
+
+pdfs_dates_in_senate <- fread.(paste0(rohan_addresses, "/URLs_for_1901-2017_PDFs_senate.csv")) %>% 
+  pull(file_name) %>% 
+  get_dates()
+
+
+
+all_rohan_pdf_dates <- unique(c(pdfs_dates_in_senate, pdf_dates_in_hors))
+
+length(all_rohan_pdf_dates)
+
+```
+
+
+
+
+## Textual quality
+
+Rohan notes that their method of OCRing PDFs causes problems, for example with "the" becoming "thc". This doesn't seem to be the case in our method.
+
+```{r}
+
+
+grepl(" thc ", big_df$main_text, fixed = T)
+
+grepl("S i r", big_df$main_text, fixed = T)
+
+```
+
+

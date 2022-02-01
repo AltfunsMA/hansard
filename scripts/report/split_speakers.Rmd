@@ -1,0 +1,178 @@
+
+
+
+```{r}
+
+test_text <- read_csv("general_data/02_full_text/1901_Aug.csv") 
+
+
+test_text$main_text <- test_text$main_text %>% 
+  str_squish() %>% 
+  str_replace_all(c("M[[:space:]]?r[[:punct:]]+[[:space:]]" = "Mr ",
+                    "Mr." = "Mr ",
+                    "M[[:space:]]?r[[:space:]]?s[[:punct:]]?+[[:space:]]" = "Mrs",
+                    "Mc(?=[[:upper:]]+)" = "MC",
+                    "Mac(?=[[:upper:]]+)" = "MAC",
+                    "(?<=\\S)Mr" = " Mr", # If there is not a space to the left of Mr then put one there
+                    "(?<=\\S)Sir" = " Sir",
+                    "D[[:space:]]?r[[:space:]]*[[:punct:]]" = "Dr",
+                    "Mr SYDNEY; SMITH" = "Mr SYDNEY SMITH",
+                    "to encourage such industries; Mr JONES" = "Mr JONES",
+                    "Mi-\\."= "Mr",
+                    "to encourage such industries; Mr JONES" = "Mr JONES", 
+                    "PAIRS; Mr SPEAKER" ="Mr SPEAKER",
+                    "Ms Butler:" = "Ms BUTLER:",
+                    "Ms Henderson:" ="Ms HENDERSON:"))
+
+
+
+
+```
+
+
+
+```{r}
+
+speaker_match <- test_text$main_text %>% 
+  str_match(on_the_regular)
+
+empty_ix <- speaker_match %>% 
+  as_tibble(.name_repair = "unique") %>% 
+  mutate(id = row_number()) %>% 
+  filter(is.na(`...1`)) %>% 
+  pull(id)
+
+cat("Empty text:", length(empty_ix))
+
+# speaker_match[,1]
+
+```
+
+
+
+```{r}
+tic("alt match")
+
+alt_match <- test_text$main_text %>% 
+  stringi::stri_extract_all_regex(main_rx)
+
+toc()
+```
+
+```{r}
+tic("alt match")
+
+alt_match_df <- test_text %>% 
+  mutate(speakers = stringi::stri_extract_all_regex(main_text, main_rx))
+
+toc()
+```
+
+
+```{r}
+
+
+map_chr(alt_match, ~paste(.x[!is.na(.x)], collapse = "||"))
+
+
+
+
+empty_alt_ix <- alt_match %>% 
+  bind_rows.() %>% 
+  as_tibble(.name_repair = "unique") %>% 
+  mutate(id = row_number()) %>% 
+  filter(is.na(`...1`)) %>% 
+  pull(id)
+
+cat("Empty text:", length(empty_alt_ix))
+```
+
+
+```{r}
+
+unlist(map(alt_match, is.na)) %>% 
+  sum()
+  
+
+
+```
+
+
+
+```{r}
+
+map_chr(alt_match, ~paste(.x[!is.na(.x)], collapse = "||"))
+
+
+```
+
+```{r}
+tricky_text <- c("Thursday, 29 August 1901Page: 4341 Mr KINGSTON I have been rather interested by the remarks of the honorable member for North Sydney, because he has quoted cases which are not parallel. If .the honorable member had gone carefully through the Customs Bill he would have seen that the position under that Bill is exactly that which is taken here. He will find, for instance, under section 64 of this Distillation Bill that— Any officer having wifch him a writ of assistance or a Customs warrant under fche Customs Act 1901 may at any time in the day or night enter into any house, premises, or place, and may break open fche same and any chests, trunks, or packages in which illicit stills or illicit spirits may be or may be supposed to be. There are two positions as regards private premises generally, and as regards places where officers ought to be, of very great right, for the discharge of their duty. One is a ship and the other is a distillery, and while there is a certain provision in this Distillation Bill with regard to a distillery there is a similar provision in the Customs Bill with regard to a ship. With respect to a ship, under the Customs Bill any officer may board any ship, search any ship, and secure any goods on any ship, and walk them off to the King's warehouse. Mr MCCay - Clause 93 of the Customs Bill is an exactly analogous clause. Mr KINGSTON Yes ; it provides that— The collector at all hours of the day aud night shall have access fco every part of any warehouse and power to examine the goods therein and for that purpose to break open fche warehouse or any premises necessary to be passed through fco secure access. Mr Thomson - The \"collector\"? Mr KINGSTON Le t us look at the definition of the collector, and the honorable member will see that i t includes the controller and any collector of Customs for tlie State, and any principal officer doing duty at the time and place, and any officer doing duty in the matter in relation to which the expression is used. That is to say, that any man whose duty i t is to do that sort of tiling may do it. There is a power given to break into a distillery, but what can an officer do under the Customs Bill in regard to a ship ? I f he sees fit he can take possession of the ship, lock, stock, and barrel. Here is the power in clause 195 of the Customs R i l l : Any officer of His Majesty's forces or any officer of Customs or police may seize any forfeited ship or goods upon land or water, or any ship or goods wliich he has reasonable cause to believe are forfeited. Mr Batchelor - There is not much danger in the case of a distillery of doing that. Mr KINGSTON Ther e is not much danger of a burglar and a Customs -officer being mistaken. They are altogether unlike, their methods of procedure are entirely different, and as the responsible Minister for the Customs department I object to the comparison. Mr Thomson - The officer goes on board a ship in his uniform. Mr KINGSTON H e need not do so, and I do not think a man's authority should pass with the change of his coat. As regards customs and excise work, ifc is highly desirable, in many instances, that the officers should not act in uniform, if they are to do effective work. These powers with reference to obtaining access to a distillery are no larger than those which the police have in regard fco public-houses.")
+```
+
+
+```{r}
+str_match_all("Mr McCay", "Mr ")
+```
+
+
+
+```{r}
+
+
+tricky_match <-  str_match_all(tricky_text, alternative_rx)
+
+
+
+```
+
+
+
+```{r}
+
+
+split_test <- read_csv(paste0(dest_path, "1901_Aug.csv"))
+
+
+```
+
+
+
+```{r}
+sizes <- split_test %>% 
+  mutate(intervention = row_number()) %>% 
+  tidytext::unnest_tokens(words, main_text) %>% 
+  count(intervention) %>% 
+  pull(n)
+
+
+hist(sizes, main = "Words", breaks = 100)
+```
+
+
+```{r}
+summary(sizes)
+
+
+
+```
+
+
+
+```{r}
+
+split_test$main_text[1:10]
+
+
+
+```
+
+```{r}
+
+split_test$speakers[1:10]
+
+
+```
+
+
+

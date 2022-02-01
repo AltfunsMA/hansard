@@ -14,3 +14,6 @@ logs/*
 bundestag/
 wikidata/
 terms/
+*.code-workspace
+*.zip
+*.html

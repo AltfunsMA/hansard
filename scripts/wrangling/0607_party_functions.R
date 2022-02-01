@@ -1,7 +1,6 @@
 # Party functions
 
-library(tidytable)
-library(stringr)
+pacman::p_load(tidytable, stringr)
 
 query_party <- function(party_name) {
   
@@ -27,21 +26,25 @@ get_equivs <- function(DF, from, to) {
   
 }
 
-
 wikify_person_name <- function(surnms_first) {
-  
-  no_comma <- str_detect(surnms_first, ",", negate = T)
-  
-  if(sum(no_comma) > 0) {
+ 
     
-    stop("No comma in strings ", paste(surnms_first[no_comma], "|"), ".\n",
+  no_comma <- all(str_detect(surname_first_vector, ",", negate = T))
+  
+  
+  if(no_comma) {
+    
+    warning("No comma in strings ", head(paste(surname_first_vector[no_comma], "\n")), ".\n",
          "Is it really in format 'Surname, Name?'")
+    
+    return(surname_first_vector)
     
     
   }
   
-  str_split(surnms_first, ",") %>% 
-    map_chr.(~paste(str_remove_all(.x[[2]], "(Sen |Senator |Mr |Ms )"), .x[[1]])) %>% 
+str_split(surname_first_vector, ",") %>% 
+    map_if(~length(.x) == 2, ~paste(str_remove_all(.x[[2]], "(Sen |Senator |Mr |Ms )"), .x[[1]])) %>%  
+    unlist() %>% 
     str_squish() %>% 
     str_replace("&Rsquo;", "'")
   

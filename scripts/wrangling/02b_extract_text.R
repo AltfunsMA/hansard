@@ -1,7 +1,7 @@
 css_marker <- c(".docDiv", "#documentContent") # selecting using SG online
 
-poss_html_node <- possibly(html_node, otherwise = NA)
-poss_html_text <- possibly(html_text, otherwise = NA)
+poss_html_node <- possibly(html_node, otherwise = "No node")
+poss_html_text <- possibly(html_text, otherwise = "No text")
 
 extract_text <- function(html, title) {
 
@@ -24,7 +24,7 @@ extract_text <- function(html, title) {
   
   if (length(text_temp) == 0) {
     
-    message(paste0("No text for:", title)) 
+    # message(paste0("No text for:", title)) 
     return(NA)
     
   }
@@ -34,7 +34,7 @@ extract_text <- function(html, title) {
   txt_selected <- unlist(text_temp[which(nchar(text_temp) > 100)])
   
   if(length(txt_selected) < 1) {
-    return(NA)
+    return("Length 0 text")
   }
   
   # For several matches, pick one with the most characters

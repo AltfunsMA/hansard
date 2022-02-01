@@ -6,14 +6,9 @@
 
 # Load up--------
 
-suppressPackageStartupMessages({ 
-library(tidytable)
-library(lubridate)
-library(rvest)
-library(tidyverse)
-library(tictoc)
+pacman::p_load(tidytable, lubridate, rvest, progress, tidyverse, tictoc)
+
 source('scripts/wrangling/02b_extract_text.R')
-})
 
   # 1. Download CSV files from the Hansard search website 
   # 2. Create a folder '{hansard_project}/{main_folder}_data/01_records'
@@ -58,6 +53,9 @@ if(isTRUE(test)) {
 
 source_path <- paste0(main_folder, '_data/01_records/')
 
+combo_record_file <- paste0(source_path, "combined_", main_folder, "_records.csv")
+# combo_record_file <- paste0(source_path, "second_try_records.csv")
+
 batch_dir <- paste0(main_folder, '_data/00_batches/')
 
 out_path <- paste0(main_folder, "_data/02_full_text/")
@@ -78,10 +76,6 @@ if(!file.exists(c(download_log)))  file.create(download_log)
 if(!file.exists(fail_log)) file.create(fail_log)
 
 
-problem_counter <- 0 # For use inside query_in_batches.R
-
-
-
 # CHECKING EXISTING FILES ##############
 message("Loading records...")
 
@@ -89,12 +83,33 @@ rec_list <- list.files(path = source_path, pattern = ".csv")
 
 names(rec_list) <- str_match(rec_list, "(^\\w+?)_")[,2]
 
+aph_url <- "https://parlinfo.aph.gov.au:443/parlInfo/search/display/display.w3p;query=Id"
 
-
-rec_df <- map_dfr.(rec_list, ~fread.(paste0(source_path, .x)), 
-                  .id = "term") %>% 
-  mutate(year = year(dmy(Date))) %>% 
-  distinct()
+if(!file.exists(combo_record_file)) {
+  
+  first_rec_df <- map_dfr.(rec_list, ~fread.(paste0(source_path, .x)))
+  
+  first_rec_df %>% 
+    mutate.(Permalink = str_remove(Permalink, aph_url)) %>% 
+    select.(-Source, -Page) %>% 
+    fwrite.(combo_record_file)
+  
+}
+  
+if(!exists("rec_df")) {
+  
+  
+  rec_df <- fread.(combo_record_file,
+                   select = c("Permalink", "Date", "Title"))
+  
+  
+  rec_df <- rec_df %>%
+    mutate.(year_month = paste0(year(dmy(Date)), "_", month(dmy(Date), label = T)),
+            year = year(dmy(Date))) %>%
+    distinct.()
+  
+  
+} else {message('Using records dataframe in the Global Env')}
 
 
 existing_ids <- read_lines(download_log)
@@ -108,7 +123,7 @@ if(length(existing_ids) == 0) {
 } else {
   
   rec_df_remaining <- rec_df %>% 
-    filter(!`System Id` %in% existing_ids)
+    filter(!Permalink %in% existing_ids)
   
   }
 
@@ -120,45 +135,46 @@ batch_size <-  100
 
 if(test) {
 
-  batch_size <- 2 
+  batch_size <- 3 
   
-  problematic <- rec_df_remaining %>%
-    filter(year %in% c(1981, 2000)) %>%
-    group_by(year) %>%
-    slice_sample(n = batch_size*2) %>%
-    ungroup() %>%
-    # mutate(Permalink = "THIS SHOULD CAUSE ERROR FOR TESTING PURPOSES") %>%
-    slice(1)
+  # Remove the comments to test problematic responses
   
-  rec_df_remaining <- rec_df_remaining %>% 
-   filter(year %in% c(1981, 2000)) %>% 
-    group_by(year) %>% 
-    slice_sample(n = batch_size*2) %>% 
-    ungroup() %>%
-  bind_rows(problematic)
+  # problematic <- rec_df_remaining %>%
+  #   slice_sample(n = 1) %>% 
+  #   mutate(Permalink = "THIS SHOULD THROW AN ERROR") 
+  # 
+  # never_succeeds <- rec_df_remaining %>%
+  #   slice_sample(n = 1) %>% 
+  #   mutate(Permalink = "http://httpbin.org/status/500") 
+  
+  rec_remaining_final <- rec_df_remaining %>% 
+   filter(year %in% c(2003, 2005)) %>% 
+    slice_sample.(.by = year_month, n = batch_size) 
+  # %>% 
+  # bind_rows(problematic, never_succeeds)
  
-}
+} else {  rec_remaining_final <- rec_df_remaining }
 
 # MAIN LOOP ###############################
   
-rev_sorted_years <- sort(unique(rec_df_remaining$year), decreasing = T)
+rev_sorted_date <- sort(unique(rec_remaining_final$year_month), decreasing = T)
 
-for (yr in rev_sorted_years) {
+for (fecha in rev_sorted_date) {
 
-  records <- rec_df_remaining %>% 
-    filter(year == yr)
+  records <- rec_remaining_final %>% 
+    filter(year_month == fecha)
   
 
  if(nrow(records) == 0) { 
   
-   message("No records left in year ", yr)
+   message("No records left in year_month ", fecha)
     
    next
    
     }
 
  
-message("\n*** Processing records from ", yr, " ***")
+message("\n*** Processing records from ", fecha, " ***")
 message("AEST ", now(tzone = "Australia/Melbourne"), "\n")
 
 source('scripts/wrangling/02_batch_download.R', local = TRUE)

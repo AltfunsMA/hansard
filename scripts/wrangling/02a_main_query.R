@@ -13,60 +13,71 @@ message(n, ' records to process in ', batches_n,  ' batches \n')
 
 # MAIN LOOP
 
-poss_read_html <- possibly(read_html, otherwise = NA)
+poss_read_html <- possibly(read_html, otherwise = "no HTML")
 
-default_sleep <- max(problem_counter, 1)
-current_sleep <- default_sleep 
+
+
+# Use possibly if URLs likely to be wrong
+http_get <- function(address) {
+  
+  httr::RETRY("GET", address, quiet = FALSE,  times = 5)
+  
+} 
+
+
+poss_http_get <- possibly(http_get, NA)
+
+poss_status_code <- possibly(httr::status_code, NA)
+
 
 for (i in 1:batches_n) {
   
+  start_time <- Sys.time()
+  
   ## DOWNLOAD AND TEXT EXTRACTING (rvest funs w purrr wrappers)----
   
+  
+  if(test && nrow(records_list[[i]]) < 20) cat(records_list[[i]]$Permalink, sep = "\n")
+  
   dld_batch <- records_list[[i]] %>% 
-    mutate(html = map(Permalink, poss_read_html),
-           main_text = map2_chr(html, Title, ~extract_text(.x, .y))) %>% 
-    select(-html)
-  
-  ## Assessing batch return quality -----
-  df_nrows <- dld_batch %>% 
-    filter(is.na(main_text)) %>% 
-    nrow()
-  
-  perc_empty <- df_nrows/nrow(dld_batch)*100
+    mutate(html = map(paste0(aph_url, Permalink), 
+                      ~httr::RETRY("GET", .x, quiet = FALSE,  times = 5)),
+           http_code = map_int(html, httr::status_code),
+           retry_after = map(html, list("headers", "retry-after")),
+           xml = map(html, poss_read_html),
+           main_text = map2_chr(xml, Title, ~extract_text(.x, .y)))
   
   
-  ## Extending wait time if empties are present-----
-  # reducing it after this is sorted out
+  retry_after <- unique(unlist(dld_batch$retry_after))
   
-  if(is.nan(perc_empty)) next
+  if(!is.null(retry_after)) cat("Retry after: ", retry_after, "\r")
   
-  if(perc_empty > 25) {
+  codes <- count(dld_batch, http_code) %>% 
+    mutate(total = sum(n),
+           proportion = scales::percent(n/total)) %>% 
+    select(http_code, proportion)
+  
+  if(test || any(unique(codes$http_code) != 200))  { print(codes)  }
+
+  ### SAVE INDIVIDUAL BATCH ##########
+  
+  dld_batch %>% 
+    select(-http_code, -html, -xml) %>% 
+    write_rds(paste0(batch_dir, batch_rx, i, "_",
+                              cptools::date_str(), ".rds"))
+  
+  end_time <- Sys.time()
+  
+  x <- difftime(end_time, start_time)
+  
+  if(x > period(60, "sec")) { 
     
-    problem_counter <<- problem_counter + 1
-    
-    calm_increase <- perc_empty/10
-    
-    cat(" Batch", i, "returned", perc_empty, "% empty html ||")
-    
-    current_sleep <- min(60, current_sleep + calm_increase*default_sleep)
-    
-  } else {
-    
-    cat("Batch", i, "all good w sleep =", current_sleep, "s || ")
-    
-    problem_counter <-  problem_counter - 1 
-    
-    current_sleep <- current_sleep - default_sleep
-    current_sleep <- max(default_sleep, current_sleep)
+    stop("Waiting time has now exceeded 1 minute. ",
+    "Stopping script to improve download speed.")
     
   }
   
-  
-  ### SAVE INDIVIDUAL BATCH WHETHER SUCCESSFUL OR NOT ##########
-  
-  write_rds(dld_batch, paste0(batch_dir, batch_rx, i, ".rds"))
-  
-  Sys.sleep(current_sleep)
-  
+  cat(round(x, 2), units(x), "to dl'd & extract text in batch", i, " \r")
+
   
 }
