@@ -28,7 +28,7 @@ file_names <-
     full.names = TRUE
   )
 
-test <- TRUE
+test <- FALSE
 
 
 already_done <- list.files(split_text_path)
@@ -39,7 +39,7 @@ left_to_do <- setdiff(basename(file_names), already_done)
 
 if(test) {
   
-  left_to_do <- file_names[grepl("1978|1990|2003", file_names)]
+  left_to_do <- basename(file_names[grepl("2009_Aug.csv", file_names)])
   
   cat("Doing: ", left_to_do, sep = "\n")
   
@@ -87,14 +87,12 @@ process_speakers <- function(group_id, str_vec, n) {
   s <- str_vec[1] %>% 
     str_split(sep_speaker_string) %>% 
     unlist() %>% 
-    # everything except letters and hyphens unless they are at the end
+    # everything except letters and hyphens unless the hyphens are at the end
     str_remove_all("[^[:alpha:]-\\s]|-(\\s+)?$") %>% 
     str_squish()
   
-  # browser()
   
-  
-  # if(unique(group_id) %in% c("%3A%22chamber%2Fhansardr%2F1990-11-08%2F0050%22")) {
+  # if(unique(group_id) %in% c("%3A%22chamber%2Fhansardr%2F2009-08-12%2F0091%22")) {
   # 
   # 
   #   browser()
@@ -122,16 +120,21 @@ process_speakers <- function(group_id, str_vec, n) {
 
 split_by_speaker <- function(path) {
     
+  # Some of the permalinks were downloaded twice or more; `distinct` alone does
+  # not work because the text has slight differences in
+  # a handful of cases. By the looks of it, HTML parsing.
+  # When duplicated permalinks are passed through process_speaker, this throws an error
     
     input_file <-
       read_csv(path,
                trim_ws = FALSE,
                col_types = "ccc") %>% 
-      distinct.()
+      distinct.(Permalink, .keep_all = T)
+  
 
     # Retaining \n for use below
     input_file$main_text <-
-      str_replace_all(input_file$main_text, "\\h+", " ")
+      str_replace_all(input_file$main_textain_text, "\\h+", " ")
 
     # Ad-hoc fixes retained from Rohan Alexander's
     input_file$main_text <- str_replace_all(input_file$main_text,
@@ -143,6 +146,7 @@ split_by_speaker <- function(path) {
                                               "S i r" = "Sir",
                                               " mc " = " me ",
                                               "Mi-\\."= "Mr"))
+    
 
 
     input_file$main_text <-
@@ -152,18 +156,20 @@ split_by_speaker <- function(path) {
         fix_wrong_names$corrected,
         vectorize_all = FALSE
       )
+    
 
      separated <-  input_file %>%
        # Need to save the speakers first because separate_rows removes them
        mutate(speakers = map_chr(stringi::stri_extract_all_regex(main_text, main_rx),
                                   ~paste(.x[!is.na(.x)], collapse = sep_speaker_string))) %>%
-       separate_rows(main_text, sep = main_rx) 
+       separate_rows(main_text, sep = main_rx)
 
      # browser()
 
      out_file <- separated %>%
        group_by(Permalink) %>%
        mutate(n = n(),
+              section_id = row_number(),
               speakers_split = process_speakers(Permalink, speakers[1], n[1])) %>%
        ungroup() %>%
        select(-n) %>%
@@ -178,17 +184,24 @@ split_by_speaker <- function(path) {
     
 }
 
-
-res <- pbmclapply(left_to_do, split_by_speaker, mc.cores = 10, ignore.interactive = T)
-
-write_rds(res, 
-          paste0("general_data/03_split/performance/split_run_res_", 
-                 cptools::date_str()))
+if(test) {
+  
+res <- lapply(paste0(full_text_path, left_to_do), split_by_speaker)
 
 
-successes <- map_lgl(res, ~class(.x) == "character")
+} else {
 
-success_percent <- scales::percent(sum(successes)/length(res))
+res <- pbmclapply(paste0(full_text_path, left_to_do), split_by_speaker, mc.cores = 11,
+                  ignore.interactive = T)
+
+# write_rds(res, 
+#           paste0("general_data/03_split/performance/split_run_res_", 
+#                  cptools::date_str()), ".rds")
+# 
+# 
+# successes <- map_lgl(res, ~class(.x) == "character")
+# 
+# success_percent <- scales::percent(sum(successes)/length(res))
 
 
 cat("Success:", success_percent , '\n')
@@ -202,6 +215,9 @@ if(success_percent != "100%") {
   print(sample(res[!successes], 1))
   
 }
+
+}
+
 
 
 

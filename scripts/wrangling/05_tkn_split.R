@@ -22,9 +22,9 @@ if (length(cargs) == 0) {
   
   filename <- "repr_rights_data/04_model_inputs/repr_rights_hans_so.csv"
   
-  tkns_4_std_paragraph <- 300 # Aimed for length (inside merge_sm_chunks function)
+  tkns_4_std_paragraph <- 200 # Aimed for length (inside merge_sm_chunks function)
   
-  threshold <- 600 # Maximum tolerance
+  threshold <- 400 # Maximum tolerance
   
   text_var <- "main_text" # should be main_text for our hansard downloads; 
   

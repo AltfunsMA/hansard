@@ -1,6 +1,6 @@
 
 
-orig_fp <- list.files(full_text_path, pattern = "csv$", full.names = T)
+orig_fp <- list.files("general_data/02_full_text/", pattern = "csv$", full.names = T)
 
 some_orig_fp <- orig_fp[grepl("1978|1990|2003", orig_fp)]
 
