@@ -10,7 +10,7 @@ output:
 ---
 
 ```{r, echo = FALSE}
-pacman::p_load(ggtext, tidytable, scales, stringr, forcats, purrr, ggplot2, lubridate, tibble, zoo, deeptime)
+pacman::p_load(ggtext, tidyverse, tidytable, scales, stringr, forcats, purrr, ggplot2, lubridate, tibble, zoo, deeptime)
 
 source("scripts/report/coal_topics_FUNS.R")
 source("scripts/report/iea_FUNS.R")
@@ -23,12 +23,50 @@ export_by_destination <- fread.("coal_data/general_stats/COAL_EXPORTS-2020-1-EN-
 
 
 
-ieacoal %>% filter.(FLOW %in% c("IMPORTS", 'EXPORTS')) %>%  distinct.(PRODUCT, FLOW)
-
 
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, results = 'asis', cache.lazy = FALSE, width = 9)
 
 ```
+
+### Data overview
+
+```{r}
+
+names(ieacoal)
+
+```
+
+
+```{r}
+
+names(export_by_destination)
+
+```
+
+
+
+```{r}
+
+ieacoal %>% filter.(FLOW %in% c("IMPORTS", 'EXPORTS')) %>%  distinct.(PRODUCT, FLOW)
+
+```
+
+
+```{r}
+
+export_by_destination %>% distinct.(PRODUCT)
+
+```
+
+
+See coal documentation
+http://wds.iea.org/wds/pdf/coal_documentation.pdf
+
+
+"MBROWN" and "MHARD" seen in the IEA general coal file are not documented but seem to correspond to HARDCOAL and BROWN in the export file.
+
+
+
 #### Australian export destinations
 
 ```{r, echo = FALSE}
@@ -63,9 +101,48 @@ aus_exports <- exportsaus %>%
 
 ```
 
+### EIA data    
+
+```{r}
+countries <- c("India", "China", "Japan", "South Korea", "Taiwan")
+
+eia <- read_csv("/data/hansard/coal_data/general_stats/EIA_Coal_SeriesExport-03-20-2022_16-38-24_clean.csv") %>% 
+  select.(contains(countries)) %>% 
+  mutate.(year = 1980:2020)
+
+short_to_metric <- 0.907185
+
+
+eia_coal <- eia %>% 
+  rename_with.(~str_remove_all(.x, " imports,|, Annual")) %>% 
+  mutate_all(as.numeric) %>% 
+  pivot_longer(cols = -year, values_to = "k_short_tons") %>% 
+  mutate(name = str_replace_all(name, " ((South )?[A-Za-z]+$)", "_\\1"),
+         Mtonnes = k_short_tons/1000*short_to_metric) %>% 
+  separate(name, sep = "_", into = c("type", "country"))
+
+
+unique(eia_coal$type)
+
+```
+
+
+```{r}
+eia_for_verification <- eia_coal %>% 
+  filter(type %in% c("Coal")) %>% 
+  mutate(simple_country = recode(country, "China" = "M. China")) %>% 
+  select(year, simple_country, EIA_Mtonnes = Mtonnes)
+
+
+eia_for_verification
+
+```
+
+
 
 
 #### IEA total coal imports
+
 
 ```{r, rows.print = 40}
 ieaimports <- filt_ieacoal_products("IMPORTS") 
@@ -93,6 +170,66 @@ all_imports <- ieaimports %>%
 ```
 
 
+```{r}
+main_importers <- all_imports %>% 
+  get_Mtonnes() %>% 
+  select(imported_total = Mtonnes, simple_country, TIME)
+```
+
+There are some discrepancies between EIA and IEA data but not for the period where it would make a difference. It is nonetheless peculiar.
+
+```{r}
+
+
+main_importers %>% 
+  rename(year = TIME) %>% 
+  right_join(eia_for_verification) %>% 
+  mutate(diff = imported_total - EIA_Mtonnes) %>% 
+  filter(diff > 0.01) %>% 
+  distinct(simple_country, year, diff)
+
+```
+
+
+```{r}
+proportion <- aus_exports %>% 
+  get_Mtonnes() %>% 
+  left_join(main_importers, by = c("simple_country", "TIME")) %>% 
+  mutate(Mtonnes = Mtonnes/imported_total) 
+  
+proportion %>% 
+  summarize.(.by = simple_country, 
+             mean_prop = scales::percent(mean(Mtonnes/imported_total)))
+```
+
+
+```{r}
+
+
+aus_prop_gg <- bind_rows.(list("Australian exports (Mt)" = get_Mtonnes(aus_exports), "Prop. of country imports" = proportion), .id = "trade_type") %>% 
+    filter(!(simple_country == "India" & TIME < 1995) ) %>%
+  basic_jinchukou(group_by = c("TIME", "simple_country", "trade_type")) +
+  facet_wrap(~trade_type, scales = "free") +
+  # imports_add_on +
+  labs(x = "", y = "", colour = "") +
+  theme(text = element_text(family="Serif"),
+        legend.position = "bottom")
+
+  
+
+ggsave(paste0("coal_output/", img_subfolder, "/aus_global_coal.png"), aus_prop_gg)
+
+aus_prop_gg
+
+
+
+```
+
+
+
+
+
+
 ```{r, height = 10}
 
 
@@ -103,7 +240,7 @@ aus_global_gg <- bind_rows.(list("Global imports" = all_imports, "Australian exp
   imports_add_on +
   theme(legend.position = "bottom")
 
-ggsave(paste0("coal_output/images4paper/aus_global_coal.png"), aus_global_gg)
+ggsave(paste0("coal_output/", img_subfolder, "/aus_global_coal_old.png"), aus_global_gg)
 
 aus_global_gg
 
@@ -143,7 +280,7 @@ main_coal_exporters_gg <- ieaexports %>%
   geom_vline(xintercept = main_eras[3], linetype = "dashed")
 
 
-ggsave(paste0("coal_output/images4paper/main_coal_exporters.png"), main_coal_exporters_gg)
+ggsave(paste0("coal_output/", img_subfolder,"/main_coal_exporters.png"), main_coal_exporters_gg)
 
 main_coal_exporters_gg
 

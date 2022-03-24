@@ -43,7 +43,7 @@ ct_names <- c("People's Republic of China" = "M. China",
 top_iea_value <- function(df, N = 7) {
   
   top_ausexports <- df %>% 
-    summarize.(.by = simple_country, total = abs(sum(Value, na.rm = T))) %>% 
+    summarize.(.by = c(simple_country, PRODUCT), total = abs(sum(Value, na.rm = T))) %>% 
     slice_max.(total, n = N) 
   
 }
@@ -63,11 +63,21 @@ filt_ieacoal_products <- function(flow) {
 
 
 
+get_Mtonnes <- function(df, group_by = c("TIME", "simple_country")) {
+  
+  
+  df %>% 
+  summarize.(.by = all_of(group_by), Mtonnes = abs(sum(Value, na.rm = T))/1000)
+  
+  
+}
+
+
 basic_jinchukou <- function(df, group_by = c("TIME", "simple_country")) {
   
   plot_df <- df %>% 
-    summarize.(.by = all_of(group_by), tonnes = abs(sum(Value, na.rm = T))/1000) %>% 
-    mutate.(simple_country = fct_rev(fct_reorder(simple_country, tonnes, max)))
+    {if(!"Mtonnes" %in% names(.)) get_Mtonnes(., group_by) else . } %>% 
+    mutate.(simple_country = fct_rev(fct_reorder(simple_country, Mtonnes, max)))
   
   jinchu_colours <- jinchu_colours[names(jinchu_colours) %in% plot_df$simple_country]
   
@@ -75,7 +85,7 @@ basic_jinchukou <- function(df, group_by = c("TIME", "simple_country")) {
                                                levels(plot_df$simple_country)))]
   
   ggplot(plot_df) +
-    geom_line(aes(TIME, tonnes, colour = simple_country)) +
+    geom_line(aes(TIME, Mtonnes, colour = simple_country)) +
     scale_colour_manual(values = jinchu_colours) 
   
 }

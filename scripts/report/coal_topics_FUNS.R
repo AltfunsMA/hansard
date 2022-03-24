@@ -1,14 +1,46 @@
 
 
-main_eras <- c(1935, 1963, 2005)
 
-elec_period <- 1901:2020
+elec_period <- 1901:2022
 
 minimum_display_year <- 1900
 
+main_eras <- c(1935, 1963, 2005)
+
+main_eras <- main_eras[main_eras > minimum_display_year]
 
 
-party_names <- c("Country", "Greens", "Labor", "Liberal", "Other")
+img_subfolder <- "images4report"
+
+if(img_subfolder == "images4report") {
+
+font_family <- "sans"
+
+party_names <- c("National", "Greens", "Labor", "Liberal", "Other")
+
+} else {
+
+  font_family <- "Serif"
+  
+  party_names <- c("Country", "Greens", "Labor", "Liberal", "Other")
+
+
+}
+
+
+rename_final_alliance <- function(df) {
+  
+  if(img_subfolder == "images4report") {
+  
+  df[["final_alliance"]] <- recode(df$final_alliance, "Country" = "National")
+  
+  }
+  
+  df
+  
+}
+
+
 
 party_colours <- c("goldenrod3", "darkgreen", "firebrick", "blue", "black")
 
@@ -27,7 +59,7 @@ names(party_colours) <- party_names
 
 aus_pms <- fread.("/data/hansard/terms/aus_pm_parties_clean.csv") %>% 
   arrange.(start_year) %>% 
-  mutate.(end_year = dplyr::lead(start_year, default = 2022),
+  mutate.(end_year = dplyr::lead(start_year, default = 2023),
           simple_party = fct_relevel(ifelse.(party == "Australian Labor Party", "Labor", "Liberal"), "Labor"))
 
 
@@ -35,13 +67,20 @@ elections <- tibble(year = elec_period) %>%
   left_join.(select.(aus_pms, start_year, pm), by = c("year" = "start_year")) %>% 
   fill.(pm) %>% 
   mutate.(legislature = cumsum(replace_na.(pm != lag(pm), TRUE)),
-          era = cut(year, c(1900, main_eras, 2021)))
+          era = cut(year, c(1900, main_eras, 2023)))
 
 
-short_eras_df <- tibble(min_age = c(1901, main_eras),
+eras_str <- c("supply", "work rights", "diversification", "Kyoto")
+
+eras_colors <- c("beige", "#D4CB92", "beige", "#D4CB92")
+
+
+get_from_last <- function(v, l = length(main_eras)) rev(rev(v)[1:l])
+
+short_eras_df <- tibble(min_age = c(minimum_display_year, main_eras),
                   max_age = c(main_eras, 2020),
-                  name = c("supply", "work rights", "diversification", "Kyoto"),
-                  color = c("beige", "#D4CB92", "beige", "#D4CB92")
+                  name = eras_str,
+                  color = eras_colors
 )
 
 long_eras_df <- tibble(min_age = c(1901, 1980),
@@ -65,19 +104,22 @@ eras_add_on <- list(coord_geo(dat = short_eras_df,
 
 
 
-plot_gov_add_on <- list(geom_rect(data = filter.(aus_pms, 
-                                                start_year > minimum_display_year), colour=NA, show.legend=FALSE,
-                                  aes(xmin=start_year, xmax= end_year, ymin = -Inf, ymax = Inf,
+plot_gov_add_on <- list(geom_rect(data = 
+                                    filter.(aus_pms, 
+                                                start_year > minimum_display_year), 
+                                  colour=NA, show.legend=FALSE,
+                                  aes(xmin=start_year, xmax= end_year, 
+                                      ymin = -Inf, ymax = Inf,
                                       fill=simple_party), alpha=0.15))
 
 
 basic_add_ons <- list(scale_fill_manual(values = party_colours),
                       scale_x_continuous(
-                        # limits = c(1901, 2021),
-                                         breaks = c(1901, seq(1925, 2000, 
-                                                              by = 25), 
-                                                    2020),
-                                         expand = expansion(add = c(2, 2))
+                         limits = c(minimum_display_year, 2023),
+                                         # breaks = c(1901, seq(1925, 2000,
+                                         #                      by = 25),
+                                         #            2020),
+                                         expand = expansion(add = c(0, 0))
                                          ),
                       labs(x = ""),
                       geom_vline(xintercept = main_eras, linetype = "dashed"),
@@ -85,7 +127,7 @@ basic_add_ons <- list(scale_fill_manual(values = party_colours),
                         # panel.background = element_blank(),
                         #     panel.grid.major = element_line(size = 0.1, 
                         #                                     color = "grey30"),
-                        text = element_text(family="Serif"))
+                        text = element_text(family=font_family))
                       )
 
 
@@ -101,7 +143,7 @@ tax_add_ons <- list(labs(x = "", y = ""),
                     scale_x_continuous(labels = label_number(accuracy = 1, 
                                                              big.mark = ""), 
                                        expand = c(0.01, 0.2)),
-                    theme(text = element_text(size=20, family="Serif")))
+                    theme(text = element_text(size=20, family=font_family)))
 
 
 

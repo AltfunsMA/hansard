@@ -44,7 +44,6 @@ empty_ix <- speaker_match %>%
 
 cat("Empty text:", length(empty_ix))
 
-# speaker_match[,1]
 
 ```
 

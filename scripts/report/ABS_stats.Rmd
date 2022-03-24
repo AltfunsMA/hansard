@@ -105,7 +105,7 @@ legend <- get_legend(outplot +
 as_ggplot(legend)
 
 
-ggsave(paste0("coal_output/images4paper/mining_money_legend.png"), height = 1.25, width = 1.75)
+ggsave(paste0("coal_output/", img_subfolder, "/mining_money_legend.png"), height = 1.25, width = 1.75)
 ```
 
 
@@ -113,7 +113,7 @@ ggsave(paste0("coal_output/images4paper/mining_money_legend.png"), height = 1.25
 outplot +
   theme(legend.position = "none") 
 
-ggsave(paste0("coal_output/images4paper/taxable_income.png"))
+ggsave(paste0("coal_output/", img_subfolder, "/taxable_income.png"))
 
 
 ```
@@ -156,7 +156,7 @@ key_sector_earnings %>%
   scale_y_continuous(labels = dollar_format(suffix = "K", accuracy = 0.1)) +
     scale_x_continuous(breaks = c(1995, 2000, 2005, 2010, 2015, 2020), labels = label_number(accuracy = 1, big.mark = ""), expand = c(0.01, 0.6))
 
-ggsave("coal_output/images4paper/average_weekly_earnings.png")
+ggsave(paste0("coal_output/", img_subfolder, "/average_weekly_earnings.png"))
 
 
 
@@ -214,7 +214,7 @@ recent_jobs %>%
   
   
 
-ggsave(paste0("coal_output/images4paper/salary_mass.png"))
+ggsave(paste0("coal_output/", img_subfolder, "/salary_mass.png"))
     
 ```
 
@@ -294,7 +294,7 @@ multisector <- final_jobs %>%
   eras_add_on
 
 
-ggsave(paste0("coal_output/images4paper/workers_per_total.png"), multisector)
+ggsave(paste0("coal_output/", img_subfolder, "/workers_per_total.png"), multisector)
 
 multisector
 
@@ -327,7 +327,7 @@ early_prod_gg <- early_prod_to_combine %>%
 
 
 
-ggsave("coal_output/images4paper/early_production.png", early_prod_gg)
+ggsave(paste0("coal_output/", img_subfolder, "/early_production.png"), early_prod_gg)
 
 
 early_prod_gg
@@ -372,7 +372,7 @@ prod_exports_df <- late_prod_n_exports %>%
 
 
 ylim.prim <- c(0, 450)  
-ylim.sec <- c(0, 55) 
+ylim.sec <- c(0, 70) 
 
 
 b <- diff(ylim.prim)/diff(ylim.sec)
@@ -388,7 +388,13 @@ combo_prod_worker <- final_jobs %>%
 
 
 
+
 combo_prodwork_gg <- combo_prod_worker %>% 
+    mutate(type = recode(type, 
+                         "black, of which:" = "black:",
+                         "___all exports" = "- exports:",
+                       "___coking exports" = "— coking",~
+                       "___thermal exports" = "— thermal")) %>%
   ggplot(aes(x = year)) +
   geom_line(aes(y = value, colour = type)) +
   geom_line(aes(y = a + jobs*b), colour = worker_colour) +
@@ -400,8 +406,7 @@ combo_prodwork_gg <- combo_prod_worker %>%
   labs(x = "", colour = "Coal type") +
   basic_add_ons +
   eras_add_on +
-    theme(
-      # legend.position = "bottom",
+    theme(# legend.position = "bottom",
       
           axis.title = element_blank(),
           axis.text.y.right = element_text(color = worker_colour),
@@ -409,7 +414,7 @@ combo_prodwork_gg <- combo_prod_worker %>%
         axis.ticks.y.right = element_line(color = worker_colour),
         axis.title.y.right = element_text(color = worker_colour)
     ) +
-  geom_richtext(aes(x = 1920, y = 300000), colour = worker_colour, label = "coal<BR>workers", family = "serif", size = 3, label.color = NA, fill = NA) +
+  geom_richtext(aes(x = 1920, y = 220000), colour = worker_colour, label = "coal<BR>workers", family = "serif", size = 3, label.color = NA, fill = NA) +
     geom_richtext(aes(x = 1955, y = 410000), colour = jcb_colour, label = "JCB<BR>programs", family = "serif", size = 3, label.color = NA, fill = NA) +
   annotate("rect", 
            fill = jcb_colour, 
@@ -417,13 +422,65 @@ combo_prodwork_gg <- combo_prod_worker %>%
            xmin = 1950, 
            xmax = 1960, 
            ymin = -Inf,
-           ymax = Inf) +
-  theme(legend.position = "bottom", legend.box="vertical") + 
-  guides(colour=guide_legend(nrow=2,byrow=TRUE))
+           ymax = Inf)
+  # theme(legend.position = "bottom", legend.box="vertical") + 
+  # guides(colour=guide_legend(nrow=2,byrow=TRUE))
 
-ggsave(paste0("coal_output/images4paper/workers_prod_exports.png"), combo_prodwork_gg)
+
+    
+    
+ggsave(paste0("coal_output/", img_subfolder, "/workers_prod_exports.png"), combo_prodwork_gg,
+       width = , height = 4)
 
 combo_prodwork_gg
+
+```
+
+### Peter's request
+
+```{r}
+
+
+peter_plot <- combo_prod_worker %>% 
+  filter(type != "___all exports") %>% 
+  mutate(type = recode(type, "black, of which:" = "black",
+                       "___coking exports" = "met exports",
+                       "___thermal exports" = "thermal exports")) %>% 
+  ggplot(aes(x = year)) +
+  geom_line(aes(y = value, colour = type), size = 1.2) +
+  geom_line(aes(y = a + jobs*b), colour = worker_colour, size = 1.2) +
+  scale_colour_manual(values = c("black", "blue3", "#6dd1e1", brown_coal_colour), 
+                      na.translate = F) +
+  scale_x_continuous( # limits = c(1901, 2021),
+                                         breaks = c(1901, seq(1925, 2000, 
+                                                              by = 25), 
+                                                    2020),
+                                         expand = expansion(add = c(2, 2))
+                                         ) +
+  scale_y_continuous(name = "tonnes of coal", labels = unit_format(unit = "M", scale = 1e-03),
+                      sec.axis = sec_axis(~ (. - a)/b, name = "coal workers",
+                                          labels = unit_format(unit = "K", scale = 1e-03))) + 
+  labs(x = "", colour = "Coal type", y = "tonnes") +
+  # basic_add_ons +
+    theme(
+      # legend.position = "bottom",
+      
+          # axis.title = element_blank(),
+          axis.text.y.right = element_text(color = worker_colour),
+      axis.line.y.right = element_line(color = worker_colour), 
+        axis.ticks.y.right = element_line(color = worker_colour),
+        axis.title.y.right = element_text(color = worker_colour)
+    ) +
+  theme(legend.position = "bottom", legend.box="vertical",
+        text = element_text(size = 16))
+  
+  # guides(colour=guide_legend(nrow=2,byrow=TRUE))
+
+
+ggsave(paste0("coal_output/", img_subfolder, "/workers_prod_for_peter.png"), peter_plot, width = 9)
+
+
+peter_plot
 
 ```
 
@@ -479,11 +536,11 @@ top_exports_gg <- ggplot(top_exports) +
                                  "Wheat" = "goldenrod2", 
                                  "Wool" = "darkolivegreen4")) +
   geom_vline(xintercept = main_eras[3], linetype = "dashed") +
-  theme(text = element_text(family="Serif")) +
+  theme(text = element_text(family=font_family)) +
   eras_add_on
 
 
-ggsave(paste0("coal_output/images4paper/export_values.png"), top_exports_gg)
+ggsave(paste0("coal_output/", img_subfolder, "/export_values.png"), top_exports_gg)
 
 
 top_exports_gg

@@ -13,17 +13,19 @@ output:
 pacman::p_load(stringr, tidyverse, scales, tidytable, deeptime, purrr, ggplot2, ggtext, glue)
 
 params <- "k40_var0.05"
-  
-dtm_run_path <-  "coal_output/dtm/run_21Sep//all_2a_min_freq_150_21_09_21/"
+source('scripts/report/coal_topics_FUNS.R')
+
+
+dtm_run_path <-  "coal_output/dtm/erss_hansard_run/"
   
 docs_file <- "id_alliance_all_2a.csv"
   
   
 
-source('scripts/report/coal_topics_FUNS.R')
 
 paragraphs_df <- fread.(paste0("coal_data/04_model_inputs/preprocessed_datasets/", docs_file)) %>% 
-  select.(-contains("lucy"))
+  select.(-contains("lucy")) %>% 
+  rename_final_alliance()
 
 
 ```
@@ -133,7 +135,7 @@ discussion_parties_gg <- rel_discussion_norm %>%
   eras_add_on
   
 
-ggsave("coal_output/images4paper/discussion_level_parties.png", discussion_parties_gg)
+ggsave(paste0("coal_output/", img_subfolder, "/discussion_level_parties.png"), discussion_parties_gg)
 
 
 discussion_parties_gg
@@ -239,7 +241,7 @@ party_gg <- plot_differences(label)
 
 
 
-ggsave("coal_output/images4paper/party_diffs.png", party_gg)
+ggsave(paste0("coal_output/", img_subfolder, "/party_diffs.png"), party_gg)
 
 party_gg
 
@@ -250,13 +252,20 @@ party_gg
   
 ```{r}
 
-# plot_differences(category)
+party_diffs_cat_gg <- plot_differences(category)
+
+
+ggsave(paste0("coal_output/", img_subfolder, "/party_diffs_cat.png"), party_diffs_cat_gg)
+
+
+party_diffs_cat_gg
+
 
 ```
 
  
 
-### Manually aggregated categorys
+### Manually aggregated categories
 
 ```{r}
 
@@ -274,23 +283,36 @@ all_topic_scores_df %>%
 
 
 
-```{r}
+```{r, height=7}
 
 six_cats_gg <- all_topic_scores_df %>%
+  mutate(category = as.character(fct_collapse(category,
+                                              `supply &\nworkers` = c("supply", "workers"),
+                                 `trade,\neconomics &\npolitics` = c("economy", "trade", "politics")))) %>% 
   process_labs(category,
-               interesting_labels,
+               c(interesting_labels, "other issues", "trade,\neconomics &\npolitics", "supply &\nworkers"),
                party_var = NULL,
-               time_var = legislature) %>%
+               time_var = legislature) %>% 
   ggplot() +
   geom_line(aes(year, prop, colour = category)) +
   basic_add_ons +
-  scale_colour_manual(values = category_colours) +
-  eras_add_on +
+  scale_colour_manual(values = c("supply &\nworkers" = "red",
+                                 "trade,\neconomics &\npolitics" = "blue",
+                                 "environment" = "darkgreen")) +
+  coord_geo(dat = short_eras_df, 
+            ylim = c(0, 0.6),
+                              size = 3, 
+                              pos = 'bottom',
+                              height = unit(1, "lines"),
+                              center_end_labels = T) +
   plot_gov_add_on +
-  labs(y = "", colour = "Category")
+  labs(y = "", colour = "Categories") +
+    guides(
+    color = guide_legend(byrow = TRUE)
+  ) +
+  theme(legend.spacing.y = unit(0.3, "cm"))
   
-  
-ggsave("coal_output/images4paper/six_categories.png", six_cats_gg)
+ggsave(paste0("coal_output/", img_subfolder, "/six_categories.png"), six_cats_gg)
 
 six_cats_gg
 
@@ -365,22 +387,49 @@ for(subl in unique(label_plot$label)) {
 
     cat(subl)
   
+  minimum_display_year <- 1982
+  
+  main_eras <- main_eras[main_eras > minimum_display_year]
+  
   print(label_plot %>% 
-    filter.(label == subl) %>% 
+    filter.(label == "11_environmental impacts") %>% 
       {if(str_detect(subl, "taxes")) filter.(., year > 1917) else .} %>% 
     plot_w_legislature(label) +
-    theme(text = element_text(size=20)) +
+    theme(text = element_text(size=16),
+          plot.margin=unit(c(0.3,0.8,0.2,0,2),"cm")) +
       labs(y = "") +
     guides(colour = "none"))
   
 
   if(str_detect(subl, "taxes|budget|climate change|environmental impacts|big business|farming|electorate|coalminers|infrastructure|carbon"))
   
-  ggsave(paste0("coal_output/images4paper/party_", subl, ".png"))
+  ggsave(paste0("coal_output/", img_subfolder, "/party_", subl, ".png"))
   
-}
+ }
 
 
 ```
 
+  
+  
+  
+```{r}
+
+
+  minimum_display_year <- 1982
+  
+  main_eras <- main_eras[main_eras > minimum_display_year]
+  
+  label_plot %>% 
+    filter.(label == "11_environmental impacts") %>% 
+      {if(str_detect(subl, "taxes")) filter.(., year > 1917) else .} %>% 
+    plot_w_legislature(label) +
+    theme(text = element_text(size=16),
+          plot.margin=unit(c(0.3,0.8,0.2,0,2),"cm")) +
+      labs(y = "") +
+    guides(colour = "none") +
+    coord_cartesian(xlim = c(1983, 2020))
+
+```
+  
   
